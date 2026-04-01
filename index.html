@@ -232,8 +232,17 @@ function defaultState() { return { campaign: { name:'', saga:'origine', desc:'' 
 function loadState() { try { const s = JSON.parse(localStorage.getItem('scion-campaign')); if (s && typeof s === 'object') return s; } catch(e) {} return defaultState(); }
 
 function saveState() {
-    localStorage.setItem('scion-campaign', JSON.stringify(state));
-    db.ref('scionData').set(state).catch(err => console.error("Erreur Firebase:", err));
+    // SECURITE : on s'assure que les listes existent pour ne pas faire planter le site lors de l'envoi
+    if (!Array.isArray(state.scions)) state.scions = [];
+    if (!Array.isArray(state.journal)) state.journal = [];
+    if (!Array.isArray(state.diceHistory)) state.diceHistory = [];
+    
+    try {
+        localStorage.setItem('scion-campaign', JSON.stringify(state));
+        db.ref('scionData').set(state).catch(err => console.error("Erreur Firebase:", err));
+    } catch(e) {
+        console.error("Erreur:", e);
+    }
 }
 
 function initRealtimeSync() {
@@ -243,7 +252,7 @@ function initRealtimeSync() {
     db.ref('scionData').on('value', (snapshot) => {
         const remoteState = snapshot.val();
         
-        // Si Firebase nous envoie des données, on les prend tout simplement
+        // Si Firebase nous envoie des données, on les prend
         if (remoteState && typeof remoteState === 'object') {
             state = remoteState;
             localStorage.setItem('scion-campaign', JSON.stringify(state));
