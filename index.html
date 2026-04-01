@@ -48,14 +48,18 @@
         .pantheon-bar{width:4px;border-radius:4px 0 0 4px;flex-shrink:0}
         .history-item{padding:.5rem .8rem;border-left:2px solid var(--border);transition:all .2s;border-radius:0 4px 4px 0} .history-item:hover{border-left-color:var(--gold-dark);background:rgba(201,168,76,.03)}
         .reveal{opacity:0;transform:translateY(20px);transition:opacity .6s,transform .6s} .reveal.visible{opacity:1;transform:translateY(0)}
-        .sync-badge{color:var(--success); font-size: 0.7rem; display:flex; align-items:center; gap: 5px;}
+        .sync-badge{color:var(--success);font-size:.7rem;display:flex;align-items:center;gap:5px}
         @media(max-width:640px){.die-face{width:38px;height:38px;font-size:1rem}}
         @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important}}
-        .btn-cache{background:linear-gradient(135deg, var(--crimson), var(--crimson-light)); color:white; font-family:'Cinzel',serif; font-weight:700; font-size:.8rem; letter-spacing:.1em; text-transform:uppercase; padding:.8rem 2rem; border:none; border-radius:6px; cursor:pointer; transition:all .3s; margin-top: 2rem;}
-        .btn-cache:hover{background:linear-gradient(135deg, var(--crimson-light), var(--crimson)); box-shadow:0 4px 20px rgba(192,57,43,.3);}
+        .btn-cache{background:linear-gradient(135deg,var(--crimson),var(--crimson-light));color:white;font-family:'Cinzel',serif;font-weight:700;font-size:.8rem;letter-spacing:.1em;text-transform:uppercase;padding:.8rem 2rem;border:none;border-radius:6px;cursor:pointer;transition:all .3s;margin-top:2rem}
+        .btn-cache:hover{background:linear-gradient(135deg,var(--crimson-light),var(--crimson));box-shadow:0 4px 20px rgba(192,57,43,.3)}
+        #js-debug{position:fixed;bottom:8px;left:8px;font-size:10px;font-family:monospace;z-index:9999;padding:3px 8px;border-radius:4px;pointer-events:none}
     </style>
 </head>
 <body>
+    <!-- Indicateur de debug : doit afficher "JS: OK" en vert -->
+    <div id="js-debug" style="background:#1a3a1a;color:#4ade80;">Chargement...</div>
+
     <canvas id="particles-canvas" aria-hidden="true"></canvas>
 
     <nav class="fixed top-0 left-0 right-0 z-50 backdrop-blur-md border-b" style="background:rgba(8,8,16,.85);border-color:var(--border)">
@@ -69,8 +73,8 @@
                 <button class="nav-link" data-tab="journal" onclick="switchTab('journal')"><i class="fa-solid fa-book sm:mr-1.5"></i><span class="hidden sm:inline">Journal</span></button>
             </div>
         </div>
-        <div class="sync-badge absolute top-4 right-16" id="sync-status" title="Synchronisation en temps réel">
-            <i class="fa-solid fa-circle" style="font-size: 6px;"></i> En ligne
+        <div class="sync-badge absolute top-4 right-16" id="sync-status" title="Synchronisation">
+            <i class="fa-solid fa-circle" style="font-size:6px"></i> <span id="sync-text">Initialisation...</span>
         </div>
     </nav>
 
@@ -105,7 +109,7 @@
             </div>
         </section>
 
-        <section id="tab-dice" class="tab-content hidden">
+        <section id="tab-dice" class="tab-content" style="display:none">
             <div class="max-w-5xl mx-auto px-4 py-8 sm:py-12">
                 <div class="card p-4 mb-8 cursor-pointer" onclick="toggleRules()" role="button" aria-expanded="false" id="rules-toggle">
                     <div class="flex items-center justify-between">
@@ -147,7 +151,7 @@
             </div>
         </section>
 
-        <section id="tab-scions" class="tab-content hidden">
+        <section id="tab-scions" class="tab-content" style="display:none">
             <div class="max-w-6xl mx-auto px-4 py-8 sm:py-12">
                 <div class="flex items-center justify-between mb-8 flex-wrap gap-4">
                     <h2 class="section-title">Scions de la Campagne</h2>
@@ -159,14 +163,14 @@
             </div>
         </section>
 
-        <section id="tab-pantheons" class="tab-content hidden">
+        <section id="tab-pantheons" class="tab-content" style="display:none">
             <div class="max-w-6xl mx-auto px-4 py-8 sm:py-12">
                 <h2 class="section-title mb-8">Pantheons du Monde</h2>
                 <div id="pantheons-grid" class="grid sm:grid-cols-2 gap-5"></div>
             </div>
         </section>
 
-        <section id="tab-journal" class="tab-content hidden">
+        <section id="tab-journal" class="tab-content" style="display:none">
             <div class="max-w-4xl mx-auto px-4 py-8 sm:py-12">
                 <div class="flex items-center justify-between mb-8 flex-wrap gap-4">
                     <h2 class="section-title">Journal de Campagne</h2>
@@ -183,235 +187,310 @@
     <div id="toast-container"></div>
 
 <script>
-// ===== PROTECTION : si Firebase ne charge pas, le site continue de fonctionner =====
-let db = null;
-let firebaseOk = false;
+// === DEBUG : confirme que le script s'execute ===
+document.getElementById('js-debug').textContent = 'JS: OK';
+document.getElementById('js-debug').style.background = '#1a3a1a';
+document.getElementById('js-debug').style.color = '#4ade80';
+
+// === FIREBASE : protege par try/catch, le site marche meme sans ===
+var db = null;
+var firebaseOk = false;
 
 try {
-    const firebaseConfig = {
-        apiKey: "AIzaSyCr4QF8CTT-sv9kK-QLcQAUXyFTTJlvGJs",
-        authDomain: "scion-876fe.firebaseapp.com",
-        databaseURL: "https://scion-876fe-default-rtdb.europe-west1.firebasedatabase.app",
-        projectId: "scion-876fe",
-        storageBucket: "scion-876fe.firebasestorage.app",
-        messagingSenderId: "145792689346",
-        appId: "1:145792689346:web:f6b2e8d6fa04f71ff7075b",
-        measurementId: "G-D951GEQZG1"
-    };
-    firebase.initializeApp(firebaseConfig);
-    db = firebase.database();
-    firebaseOk = true;
+    if (typeof firebase !== 'undefined' && firebase.apps && firebase.apps.length === 0) {
+        firebase.initializeApp({
+            apiKey: "AIzaSyCr4QF8CTT-sv9kK-QLcQAUXyFTTJlvGJs",
+            authDomain: "scion-876fe.firebaseapp.com",
+            databaseURL: "https://scion-876fe-default-rtdb.europe-west1.firebasedatabase.app",
+            projectId: "scion-876fe",
+            storageBucket: "scion-876fe.firebasestorage.app",
+            messagingSenderId: "145792689346",
+            appId: "1:145792689346:web:f6b2e8d6fa04f71ff7075b",
+            measurementId: "G-D951GEQZG1"
+        });
+        db = firebase.database();
+        firebaseOk = true;
+    } else if (typeof firebase !== 'undefined' && firebase.apps && firebase.apps.length > 0) {
+        db = firebase.database();
+        firebaseOk = true;
+    }
 } catch (err) {
-    console.error("Firebase indisponible :", err.message);
+    console.error("Firebase error:", err);
 }
 
-// DONNEES
-const PANTHEONS = [
-    { id:'theoi', name:'Theoi', region:'Grece', icon:'fa-bolt', purview:'Mystere', color:'#c9a84c', desc:'Les dieux de l\'Olympe regnent sur le destin des mortels.' },
-    { id:'aesir', name:'Aesir', region:'Scandinavie', icon:'fa-shield-halved', purview:'Givre', color:'#7eb8da', desc:'Les dieux du Nord savent que le Ragnarok vient.' },
-    { id:'pesedjet', name:'Pesedjet', region:'Egypte', icon:'fa-eye', purview:'Etoiles', color:'#d4a24e', desc:'Les Ennead maintiennent le Ma\'at contre le Chaos.' },
-    { id:'deva', name:'Deva', region:'Inde', icon:'fa-om', purview:'Avatar', color:'#e87d3e', desc:'Les dieux de l\'Inde portent mille visages.' },
-    { id:'teotl', name:'Teotl', region:'Mesoamerique', icon:'fa-sun', purview:'Soleil', color:'#c0392b', desc:'Les dieux du Cinquieme Soleil exigent du sang.' },
-    { id:'kami', name:'Kami', region:'Japon', icon:'fa-torii-gate', purview:'Tenebres', color:'#c75b7a', desc:'Les esprits du Japon habitent chaque pierre.' },
-    { id:'tuatha', name:'Tuatha De Danann', region:'Celte', icon:'fa-clover', purview:'Prosperite', color:'#27ae60', desc:'La Cour Fabuleuse reside dans le Sidh.' },
-    { id:'orisha', name:'Orisha', region:'Yoruba', icon:'fa-drum', purview:'Fortune', color:'#e67e22', desc:'Les Orisha sont les forces de la nature.' }
+document.getElementById('js-debug').textContent = 'JS: OK | FB: ' + (firebaseOk ? 'OK' : 'HORS LIGNE');
+
+// === DONNEES ===
+var PANTHEONS = [
+    {id:'theoi',name:'Theoi',region:'Grece',icon:'fa-bolt',purview:'Mystere',color:'#c9a84c',desc:"Les dieux de l'Olympe regnent sur le destin des mortels."},
+    {id:'aesir',name:'Aesir',region:'Scandinavie',icon:'fa-shield-halved',purview:'Givre',color:'#7eb8da',desc:'Les dieux du Nord savent que le Ragnarok vient.'},
+    {id:'pesedjet',name:'Pesedjet',region:'Egypte',icon:'fa-eye',purview:'Etoiles',color:'#d4a24e',desc:"Les Ennead maintiennent le Ma'at contre le Chaos."},
+    {id:'deva',name:'Deva',region:'Inde',icon:'fa-om',purview:'Avatar',color:'#e87d3e',desc:'Les dieux de l\'Inde portent mille visages.'},
+    {id:'teotl',name:'Teotl',region:'Mesoamerique',icon:'fa-sun',purview:'Soleil',color:'#c0392b',desc:'Les dieux du Cinquieme Soleil exigent du sang.'},
+    {id:'kami',name:'Kami',region:'Japon',icon:'fa-torii-gate',purview:'Tenebres',color:'#c75b7a',desc:'Les esprits du Japon habitent chaque pierre.'},
+    {id:'tuatha',name:'Tuatha De Danann',region:'Celte',icon:'fa-clover',purview:'Prosperite',color:'#27ae60',desc:'La Cour Fabuleuse reside dans le Sidh.'},
+    {id:'orisha',name:'Orisha',region:'Yoruba',icon:'fa-drum',purview:'Fortune',color:'#e67e22',desc:'Les Orisha sont les forces de la nature.'}
+];
+var CALLINGS = [
+    {id:'createur',name:'Créateur',icon:'fa-palette',color:'#e67e22'},
+    {id:'gardien',name:'Gardien',icon:'fa-shield-halved',color:'#3498db'},
+    {id:'guerisseur',name:'Guérisseur',icon:'fa-heart-pulse',color:'#2ecc71'},
+    {id:'chasseur',name:'Chasseur',icon:'fa-crosshairs',color:'#e74c3c'},
+    {id:'juge',name:'Juge',icon:'fa-scale-balanced',color:'#f1c40f'},
+    {id:'leader',name:'Leader',icon:'fa-crown',color:'#9b59b6'},
+    {id:'amant',name:'Amant',icon:'fa-heart',color:'#ff69b4'},
+    {id:'liminal',name:'Liminal',icon:'fa-door-open',color:'#95a5a6'},
+    {id:'sage',name:'Sage',icon:'fa-book',color:'#1abc9c'},
+    {id:'trompeur',name:'Trompeur',icon:'fa-masks-theater',color:'#d35400'},
+    {id:'guerrier',name:'Guerrier',icon:'fa-khanda',color:'#c0392b'}
+];
+var JOURNAL_CATS = [
+    {id:'session',label:'Session',icon:'fa-book-open',color:'var(--gold)'},
+    {id:'pnj',label:'PNJ',icon:'fa-user-secret',color:'#7eb8da'},
+    {id:'intrigue',label:'Intrigue',icon:'fa-magnifying-glass',color:'#c75b7a'},
+    {id:'monde',label:'Monde',icon:'fa-globe',color:'#27ae60'}
 ];
 
-const CALLINGS = [
-    { id:'createur', name:'Créateur', icon:'fa-palette', color:'#e67e22' },
-    { id:'gardien', name:'Gardien', icon:'fa-shield-halved', color:'#3498db' },
-    { id:'guerisseur', name:'Guérisseur', icon:'fa-heart-pulse', color:'#2ecc71' },
-    { id:'chasseur', name:'Chasseur', icon:'fa-crosshairs', color:'#e74c3c' },
-    { id:'juge', name:'Juge', icon:'fa-scale-balanced', color:'#f1c40f' },
-    { id:'leader', name:'Leader', icon:'fa-crown', color:'#9b59b6' },
-    { id:'amant', name:'Amant', icon:'fa-heart', color:'#ff69b4' },
-    { id:'liminal', name:'Liminal', icon:'fa-door-open', color:'#95a5a6' },
-    { id:'sage', name:'Sage', icon:'fa-book', color:'#1abc9c' },
-    { id:'trompeur', name:'Trompeur', icon:'fa-masks-theater', color:'#d35400' },
-    { id:'guerrier', name:'Guerrier', icon:'fa-khanda', color:'#c0392b' }
-];
-
-const JOURNAL_CATS = [
-    { id:'session', label:'Session', icon:'fa-book-open', color:'var(--gold)' },
-    { id:'pnj', label:'PNJ', icon:'fa-user-secret', color:'#7eb8da' },
-    { id:'intrigue', label:'Intrigue', icon:'fa-magnifying-glass', color:'#c75b7a' },
-    { id:'monde', label:'Monde', icon:'fa-globe', color:'#27ae60' }
-];
-
+// === CACHE ===
 function clearAllData() {
-    if ('caches' in window) { caches.keys(caches).forEach(key => caches.delete(key)); }
+    if ('caches' in window) {
+        caches.keys().then(function(names) {
+            names.forEach(function(n) { caches.delete(n); });
+        });
+    }
     localStorage.removeItem('scion-campaign');
     localStorage.removeItem('scion-campaign-backup');
     window.location.reload(true);
 }
 
-// ETAT & SYNCHRONISATION
-let state = loadState();
-function defaultState() { return { campaign: { name:'', saga:'origine', desc:'' }, scions: [], journal: [], diceHistory: [] }; }
-function loadState() { try { const s = JSON.parse(localStorage.getItem('scion-campaign')); if (s && typeof s === 'object') return s; } catch(e) {} return defaultState(); }
-
+// === ETAT ===
+var state = loadState();
+function defaultState() { return {campaign:{name:'',saga:'origine',desc:''},scions:[],journal:[],diceHistory:[]}; }
+function loadState() { try { var s = JSON.parse(localStorage.getItem('scion-campaign')); if (s && typeof s === 'object') return s; } catch(e) {} return defaultState(); }
 function saveState() {
     if (!Array.isArray(state.scions)) state.scions = [];
     if (!Array.isArray(state.journal)) state.journal = [];
     if (!Array.isArray(state.diceHistory)) state.diceHistory = [];
     try {
         localStorage.setItem('scion-campaign', JSON.stringify(state));
-        if (firebaseOk && db) db.ref('scionData').set(state).catch(err => console.error("Erreur Firebase:", err));
+        if (firebaseOk && db) db.ref('scionData').set(state).catch(function(e) { console.error("FB save:", e); });
     } catch(e) {
-        console.error("Erreur de sauvegarde locale:", e);
-        showToast("Erreur de sauvegarde locale. Clique sur VIDER LE CACHE !");
+        console.error("Local save error:", e);
+        showToast("Erreur de sauvegarde. Clique VIDER LE CACHE.");
     }
 }
 
 function initRealtimeSync() {
+    var txt = document.getElementById('sync-text');
     if (!firebaseOk || !db) {
-        const s = document.getElementById('sync-status');
-        if (s) s.innerHTML = '<i class="fa-solid fa-circle-xmark" style="font-size:8px;color:var(--crimson-light)"></i> Hors ligne';
+        if (txt) txt.textContent = 'Hors ligne (local)';
+        var badge = document.getElementById('sync-status');
+        if (badge) badge.style.color = 'var(--crimson-light)';
         return;
     }
-    const syncStatus = document.getElementById('sync-status');
-    if (syncStatus) syncStatus.innerHTML = '<i class="fa-solid fa-spinner fa-spin" style="font-size:8px;"></i> Synchronisation...';
-    db.ref('scionData').on('value', (snapshot) => {
-        const remoteState = snapshot.val();
-        if (remoteState && typeof remoteState === 'object') {
-            state = remoteState;
-            localStorage.setItem('scion-campaign', JSON.stringify(state));
+    if (txt) txt.textContent = 'Synchronisation...';
+    db.ref('scionData').on('value', function(snapshot) {
+        var remote = snapshot.val();
+        if (remote && typeof remote === 'object') {
+            state = remote;
+            try { localStorage.setItem('scion-campaign', JSON.stringify(state)); } catch(e) {}
             loadCampaign(); renderScions(); renderJournal(); renderHistory();
         }
-        if (syncStatus) syncStatus.innerHTML = '<i class="fa-solid fa-circle" style="font-size:6px;"></i> En ligne';
-    }, (error) => {
-        console.error("Erreur Firebase :", error);
-        if (syncStatus) syncStatus.innerHTML = '<i class="fa-solid fa-circle-xmark" style="font-size:8px;color:var(--crimson-light)"></i> Erreur';
+        if (txt) txt.textContent = 'En ligne';
+    }, function(error) {
+        console.error("Sync error:", error);
+        if (txt) txt.textContent = 'Erreur sync';
+        var badge = document.getElementById('sync-status');
+        if (badge) badge.style.color = 'var(--crimson-light)';
     });
 }
 
-// PARTICULES
-const canvas = document.getElementById('particles-canvas'); const ctx = canvas.getContext('2d'); let particles = [];
-function resizeCanvas() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; } resizeCanvas(); window.addEventListener('resize', resizeCanvas);
-class Particle { constructor(x, y, burst) { this.x = x ?? Math.random() * canvas.width; this.y = y ?? Math.random() * canvas.height; this.size = Math.random() * 2 + 0.5; this.speedY = burst ? -(Math.random() * 4 + 2) : -(Math.random() * 0.4 + 0.08); this.speedX = burst ? (Math.random() - 0.5) * 5 : (Math.random() - 0.5) * 0.2; this.opacity = burst ? 0.9 : Math.random() * 0.5 + 0.15; this.maxLife = burst ? 60 + Math.random() * 40 : Infinity; this.life = 0; this.burst = !!burst; } update() { this.x += this.speedX; this.y += this.speedY; this.life++; if (this.burst) { this.speedY += 0.05; this.opacity *= 0.97; this.speedX *= 0.98; } if (!this.burst && this.y < -10) { this.y = canvas.height + 10; this.x = Math.random() * canvas.width; } return this.life < this.maxLife && this.opacity > 0.01; } draw(c) { c.beginPath(); c.arc(this.x, this.y, Math.max(0.1, this.size), 0, Math.PI * 2); c.fillStyle = `rgba(201,168,76,${this.opacity})`; c.fill(); } }
-for (let i = 0; i < 60; i++) particles.push(new Particle());
-function burstParticles(x, y, count) { for (let i = 0; i < count; i++) particles.push(new Particle(x, y, true)); }
-function animateParticles() { ctx.clearRect(0, 0, canvas.width, canvas.height); particles = particles.filter(p => { p.draw(ctx); return p.update(); }); while (particles.filter(p => !p.burst).length < 50) particles.push(new Particle()); requestAnimationFrame(animateParticles); } animateParticles();
+// === PARTICULES ===
+var canvas = document.getElementById('particles-canvas');
+var ctx = canvas.getContext('2d');
+var particles = [];
+function resizeCanvas() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+resizeCanvas();
+window.addEventListener('resize', resizeCanvas);
+function Particle(x, y, burst) {
+    this.x = x != null ? x : Math.random() * canvas.width;
+    this.y = y != null ? y : Math.random() * canvas.height;
+    this.size = Math.random() * 2 + 0.5;
+    this.speedY = burst ? -(Math.random() * 4 + 2) : -(Math.random() * 0.4 + 0.08);
+    this.speedX = burst ? (Math.random() - 0.5) * 5 : (Math.random() - 0.5) * 0.2;
+    this.opacity = burst ? 0.9 : Math.random() * 0.5 + 0.15;
+    this.maxLife = burst ? 60 + Math.random() * 40 : Infinity;
+    this.life = 0;
+    this.burst = !!burst;
+}
+Particle.prototype.update = function() {
+    this.x += this.speedX; this.y += this.speedY; this.life++;
+    if (this.burst) { this.speedY += 0.05; this.opacity *= 0.97; this.speedX *= 0.98; }
+    if (!this.burst && this.y < -10) { this.y = canvas.height + 10; this.x = Math.random() * canvas.width; }
+    return this.life < this.maxLife && this.opacity > 0.01;
+};
+Particle.prototype.draw = function(c) {
+    c.beginPath(); c.arc(this.x, this.y, Math.max(0.1, this.size), 0, Math.PI * 2);
+    c.fillStyle = 'rgba(201,168,76,' + this.opacity + ')'; c.fill();
+};
+for (var pi = 0; pi < 60; pi++) particles.push(new Particle());
+function burstParticles(x, y, count) { for (var i = 0; i < count; i++) particles.push(new Particle(x, y, true)); }
+function animateParticles() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    var kept = [];
+    for (var i = 0; i < particles.length; i++) {
+        particles[i].draw(ctx);
+        if (particles[i].update()) kept.push(particles[i]);
+    }
+    particles = kept;
+    var ambient = 0;
+    for (var i = 0; i < particles.length; i++) { if (!particles[i].burst) ambient++; }
+    while (ambient < 50) { particles.push(new Particle()); ambient++; }
+    requestAnimationFrame(animateParticles);
+}
+animateParticles();
 
-// UI
+// === ONGLETS : utilise style.display pour etre sur que ca marche ===
 function switchTab(tabId) {
-    document.querySelectorAll('.tab-content').forEach(t => t.classList.add('hidden'));
-    document.querySelectorAll('.nav-link').forEach(n => n.classList.remove('active'));
-    const tab = document.getElementById('tab-' + tabId);
-    if (tab) tab.classList.remove('hidden');
-    const navBtn = document.querySelector('.nav-link[data-tab="' + tabId + '"]');
+    var allTabs = document.querySelectorAll('.tab-content');
+    for (var i = 0; i < allTabs.length; i++) {
+        allTabs[i].style.display = 'none';
+    }
+    var allNav = document.querySelectorAll('.nav-link');
+    for (var i = 0; i < allNav.length; i++) {
+        allNav[i].classList.remove('active');
+    }
+    var tab = document.getElementById('tab-' + tabId);
+    if (tab) tab.style.display = '';
+    var navBtn = document.querySelector('.nav-link[data-tab="' + tabId + '"]');
     if (navBtn) navBtn.classList.add('active');
-    setTimeout(() => { if (tab) tab.querySelectorAll('.reveal').forEach(el => el.classList.add('visible')); }, 50);
     window.scrollTo({ top: 0, behavior: 'smooth' });
 }
-function showToast(msg) { const container = document.getElementById('toast-container'); const t = document.createElement('div'); t.className = 'toast'; t.textContent = msg; container.appendChild(t); setTimeout(() => { t.style.opacity = '0'; t.style.transition = 'opacity .3s'; setTimeout(() => t.remove(), 300); }, 2500); }
-function openModal(html) { document.getElementById('modal-container').innerHTML = '<div class="modal-overlay" onclick="if(event.target===this)closeModal()"><div class="modal-content" role="dialog" aria-modal="true">' + html + '</div></div>'; }
+
+// === UI ===
+function showToast(msg) {
+    var container = document.getElementById('toast-container');
+    var t = document.createElement('div');
+    t.className = 'toast';
+    t.textContent = msg;
+    container.appendChild(t);
+    setTimeout(function() { t.style.opacity = '0'; t.style.transition = 'opacity .3s'; setTimeout(function() { t.remove(); }, 300); }, 2500);
+}
+function openModal(html) {
+    document.getElementById('modal-container').innerHTML = '<div class="modal-overlay" onclick="if(event.target===this)closeModal()"><div class="modal-content" role="dialog" aria-modal="true">' + html + '</div></div>';
+}
 function closeModal() { document.getElementById('modal-container').innerHTML = ''; }
 
-// AUDIO
-let audioCtx = null; function getAudioCtx() { if (!audioCtx) try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) {} return audioCtx; }
-function playDiceSound() { const ac = getAudioCtx(); if (!ac) return; try { for (let i = 0; i < 6; i++) { const o = ac.createOscillator(), g = ac.createGain(); o.type = 'square'; o.frequency.setValueAtTime(250 + Math.random() * 250, ac.currentTime + i * 0.04); g.gain.setValueAtTime(0.04, ac.currentTime + i * 0.04); g.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + i * 0.04 + 0.04); o.connect(g); g.connect(ac.destination); o.start(ac.currentTime + i * 0.04); o.stop(ac.currentTime + i * 0.04 + 0.04); } const o = ac.createOscillator(), g = ac.createGain(); o.type = 'sine'; o.frequency.setValueAtTime(90, ac.currentTime + 0.28); o.frequency.exponentialRampToValueAtTime(35, ac.currentTime + 0.4); g.gain.setValueAtTime(0.12, ac.currentTime + 0.28); g.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + 0.4); o.connect(g); g.connect(ac.destination); o.start(ac.currentTime + 0.28); o.stop(ac.currentTime + 0.4); } catch(e) {} }
-function playSuccessSound() { const ac = getAudioCtx(); if (!ac) return; try { [523, 659, 784].forEach((f, i) => { const o = ac.createOscillator(), g = ac.createGain(); o.type = 'sine'; o.frequency.setValueAtTime(f, ac.currentTime + i * 0.12); g.gain.setValueAtTime(0.08, ac.currentTime + i * 0.12); g.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + i * 0.12 + 0.2); o.connect(g); g.connect(ac.destination); o.start(ac.currentTime + i * 0.12); o.stop(ac.currentTime + i * 0.12 + 0.2); }); } catch(e) {} }
-function playBotchSound() { const ac = getAudioCtx(); if (!ac) return; try { const o = ac.createOscillator(), g = ac.createGain(); o.type = 'sawtooth'; o.frequency.setValueAtTime(150, ac.currentTime); o.frequency.exponentialRampToValueAtTime(50, ac.currentTime + 0.4); g.gain.setValueAtTime(0.08, ac.currentTime); g.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + 0.4); o.connect(g); g.connect(ac.destination); o.start(ac.currentTime); o.stop(ac.currentTime + 0.4); } catch(e) {} }
+// === AUDIO ===
+var audioCtx = null;
+function getAudioCtx() { if (!audioCtx) try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) {} return audioCtx; }
+function playDiceSound() { var ac = getAudioCtx(); if (!ac) return; try { for (var i = 0; i < 6; i++) { var o = ac.createOscillator(), g = ac.createGain(); o.type = 'square'; o.frequency.setValueAtTime(250 + Math.random() * 250, ac.currentTime + i * 0.04); g.gain.setValueAtTime(0.04, ac.currentTime + i * 0.04); g.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + i * 0.04 + 0.04); o.connect(g); g.connect(ac.destination); o.start(ac.currentTime + i * 0.04); o.stop(ac.currentTime + i * 0.04 + 0.04); } var o2 = ac.createOscillator(), g2 = ac.createGain(); o2.type = 'sine'; o2.frequency.setValueAtTime(90, ac.currentTime + 0.28); o2.frequency.exponentialRampToValueAtTime(35, ac.currentTime + 0.4); g2.gain.setValueAtTime(0.12, ac.currentTime + 0.28); g2.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + 0.4); o2.connect(g2); g2.connect(ac.destination); o2.start(ac.currentTime + 0.28); o2.stop(ac.currentTime + 0.4); } catch(e) {} }
+function playSuccessSound() { var ac = getAudioCtx(); if (!ac) return; try { [523,659,784].forEach(function(f,i) { var o = ac.createOscillator(), g = ac.createGain(); o.type = 'sine'; o.frequency.setValueAtTime(f, ac.currentTime + i * 0.12); g.gain.setValueAtTime(0.08, ac.currentTime + i * 0.12); g.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + i * 0.12 + 0.2); o.connect(g); g.connect(ac.destination); o.start(ac.currentTime + i * 0.12); o.stop(ac.currentTime + i * 0.12 + 0.2); }); } catch(e) {} }
+function playBotchSound() { var ac = getAudioCtx(); if (!ac) return; try { var o = ac.createOscillator(), g = ac.createGain(); o.type = 'sawtooth'; o.frequency.setValueAtTime(150, ac.currentTime); o.frequency.exponentialRampToValueAtTime(50, ac.currentTime + 0.4); g.gain.setValueAtTime(0.08, ac.currentTime); g.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + 0.4); o.connect(g); g.connect(ac.destination); o.start(ac.currentTime); o.stop(ac.currentTime + 0.4); } catch(e) {} }
 
-// DES
-function rollDice() { const pool = Math.max(1, parseInt(document.getElementById('dice-pool').value) || 1); const threshold = Math.max(2, Math.min(10, parseInt(document.getElementById('dice-threshold').value) || 8)); const enhancement = Math.max(0, parseInt(document.getElementById('dice-enhancement').value) || 0); const difficulty = Math.max(0, parseInt(document.getElementById('dice-difficulty').value) || 0); const btn = document.getElementById('roll-btn'); btn.disabled = true; btn.style.opacity = '0.5'; playDiceSound(); let results = [], successes = 0, hasOne = false; function rollOne() { return Math.floor(Math.random() * 10) + 1; } for (let i = 0; i < pool; i++) { let die = rollOne(); results.push({ value: die, exploded: false }); if (die === 1) hasOne = true; if (die >= threshold) { successes++; if (die === 10) { let keepRolling = true; while (keepRolling) { keepRolling = false; let newDie = rollOne(); results.push({ value: newDie, exploded: true }); if (newDie === 1) hasOne = true; if (newDie >= threshold) { successes++; if (newDie === 10) keepRolling = true; } } } } } const totalSuccesses = successes + enhancement; const isBotch = hasOne && successes === 0 && enhancement === 0; const isExceptional = !isBotch && difficulty > 0 ? totalSuccesses >= difficulty + 3 : totalSuccesses >= 5; const display = document.getElementById('dice-display'); display.innerHTML = '<div id="dice-faces" class="flex flex-wrap gap-2 justify-center mb-6"></div>'; const facesContainer = document.getElementById('dice-faces'); results.forEach((r, i) => { const die = document.createElement('div'); die.className = 'die-face die-tumbling'; die.textContent = Math.ceil(Math.random() * 10); if (r.exploded) die.style.opacity = '0.7'; die.style.animationDelay = (i * 30) + 'ms'; facesContainer.appendChild(die); }); setTimeout(() => { const dice = facesContainer.querySelectorAll('.die-face'); dice.forEach((die, i) => { die.classList.remove('die-tumbling'); die.textContent = results[i].value; if (results[i].exploded) die.style.opacity = '0.7'; if (isBotch && results[i].value === 1) die.classList.add('die-botch'); else if (results[i].value >= threshold) { die.classList.add(results[i].value === 10 ? 'die-crit' : 'die-success'); } else { die.classList.add('die-fail'); } }); let statusHTML = ''; if (isBotch) { statusHTML = '<div class="text-center anim-scale-in"><p class="text-3xl font-display font-bold" style="color:var(--crimson-light)">ECHEC CRITIQUE</p></div>'; playBotchSound(); burstParticles(canvas.width / 2, canvas.height / 2, 30); } else { let badge = ''; if (isExceptional) badge = '<span class="inline-block ml-3 text-sm font-display tracking-wider px-3 py-1 rounded" style="background:rgba(201,168,76,.15);color:var(--gold-light);border:1px solid var(--gold-dark)">EXCEPTIONNEL</span>'; statusHTML = '<div class="text-center anim-scale-in"><p class="text-5xl font-display font-bold" style="color:var(--gold)">' + totalSuccesses + '</p><p class="text-sm mt-1" style="color:var(--fg-dim)">succes sur ' + results.length + ' des</p>' + (badge ? '<div class="mt-2">' + badge + '</div>' : '') + '</div>'; if (isExceptional) { playSuccessSound(); burstParticles(canvas.width / 2, canvas.height / 2, 50); } else { burstParticles(canvas.width / 2, canvas.height / 2, 15); } } facesContainer.insertAdjacentHTML('afterend', statusHTML); btn.disabled = false; btn.style.opacity = '1'; const entry = { time: new Date().toLocaleTimeString('fr-FR', { hour:'2-digit', minute:'2-digit' }), pool, threshold, enhancement, difficulty, totalSuccesses, isBotch, isExceptional }; state.diceHistory.unshift(entry); if (state.diceHistory.length > 20) state.diceHistory.pop(); saveState(); renderHistory(); }, 900); }
-function renderHistory() { const container = document.getElementById('dice-history'); if (!state.diceHistory.length) { container.innerHTML = '<p class="text-sm" style="color:var(--fg-dim)">Aucun lancer.</p>'; return; } container.innerHTML = state.diceHistory.map(h => { let label = h.isBotch ? '<span style="color:var(--crimson-light)">ECHEC CRITIQUE</span>' : h.isExceptional ? '<span style="color:var(--gold-light)">' + h.totalSuccesses + ' succes</span>' : '<span style="color:var(--gold)">' + h.totalSuccesses + ' succes</span>'; return '<div class="history-item text-sm flex justify-between items-center"><span style="color:var(--fg-dim)">' + h.time + ' — ' + h.pool + 'd seuil ' + h.threshold + '</span>' + label + '</div>'; }).join(''); }
+// === DES ===
+function rollDice() {
+    var pool = Math.max(1, parseInt(document.getElementById('dice-pool').value) || 1);
+    var threshold = Math.max(2, Math.min(10, parseInt(document.getElementById('dice-threshold').value) || 8));
+    var enhancement = Math.max(0, parseInt(document.getElementById('dice-enhancement').value) || 0);
+    var difficulty = Math.max(0, parseInt(document.getElementById('dice-difficulty').value) || 0);
+    var btn = document.getElementById('roll-btn'); btn.disabled = true; btn.style.opacity = '0.5'; playDiceSound();
+    var results = [], successes = 0, hasOne = false;
+    function rollOne() { return Math.floor(Math.random() * 10) + 1; }
+    for (var i = 0; i < pool; i++) { var die = rollOne(); results.push({value:die,exploded:false}); if (die === 1) hasOne = true; if (die >= threshold) { successes++; if (die === 10) { var keepRolling = true; while (keepRolling) { keepRolling = false; var newDie = rollOne(); results.push({value:newDie,exploded:true}); if (newDie === 1) hasOne = true; if (newDie >= threshold) { successes++; if (newDie === 10) keepRolling = true; } } } } }
+    var totalSuccesses = successes + enhancement;
+    var isBotch = hasOne && successes === 0 && enhancement === 0;
+    var isExceptional = !isBotch && difficulty > 0 ? totalSuccesses >= difficulty + 3 : totalSuccesses >= 5;
+    var display = document.getElementById('dice-display');
+    display.innerHTML = '<div id="dice-faces" class="flex flex-wrap gap-2 justify-center mb-6"></div>';
+    var facesContainer = document.getElementById('dice-faces');
+    results.forEach(function(r, i) { var die = document.createElement('div'); die.className = 'die-face die-tumbling'; die.textContent = Math.ceil(Math.random() * 10); if (r.exploded) die.style.opacity = '0.7'; die.style.animationDelay = (i * 30) + 'ms'; facesContainer.appendChild(die); });
+    setTimeout(function() {
+        var dice = facesContainer.querySelectorAll('.die-face');
+        dice.forEach(function(die, i) { die.classList.remove('die-tumbling'); die.textContent = results[i].value; if (results[i].exploded) die.style.opacity = '0.7'; if (isBotch && results[i].value === 1) die.classList.add('die-botch'); else if (results[i].value >= threshold) { die.classList.add(results[i].value === 10 ? 'die-crit' : 'die-success'); } else { die.classList.add('die-fail'); } });
+        var statusHTML = '';
+        if (isBotch) { statusHTML = '<div class="text-center anim-scale-in"><p class="text-3xl font-display font-bold" style="color:var(--crimson-light)">ECHEC CRITIQUE</p></div>'; playBotchSound(); burstParticles(canvas.width / 2, canvas.height / 2, 30); }
+        else { var badge = ''; if (isExceptional) badge = '<span class="inline-block ml-3 text-sm font-display tracking-wider px-3 py-1 rounded" style="background:rgba(201,168,76,.15);color:var(--gold-light);border:1px solid var(--gold-dark)">EXCEPTIONNEL</span>'; statusHTML = '<div class="text-center anim-scale-in"><p class="text-5xl font-display font-bold" style="color:var(--gold)">' + totalSuccesses + '</p><p class="text-sm mt-1" style="color:var(--fg-dim)">succes sur ' + results.length + ' des</p>' + (badge ? '<div class="mt-2">' + badge + '</div>' : '') + '</div>'; if (isExceptional) { playSuccessSound(); burstParticles(canvas.width / 2, canvas.height / 2, 50); } else { burstParticles(canvas.width / 2, canvas.height / 2, 15); } }
+        facesContainer.insertAdjacentHTML('afterend', statusHTML); btn.disabled = false; btn.style.opacity = '1';
+        state.diceHistory.unshift({time:new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}),pool:pool,threshold:threshold,enhancement:enhancement,difficulty:difficulty,totalSuccesses:totalSuccesses,isBotch:isBotch,isExceptional:isExceptional});
+        if (state.diceHistory.length > 20) state.diceHistory.pop(); saveState(); renderHistory();
+    }, 900);
+}
+function renderHistory() { var c = document.getElementById('dice-history'); if (!state.diceHistory.length) { c.innerHTML = '<p class="text-sm" style="color:var(--fg-dim)">Aucun lancer.</p>'; return; } c.innerHTML = state.diceHistory.map(function(h) { var l = h.isBotch ? '<span style="color:var(--crimson-light)">ECHEC CRITIQUE</span>' : h.isExceptional ? '<span style="color:var(--gold-light)">' + h.totalSuccesses + ' succes</span>' : '<span style="color:var(--gold)">' + h.totalSuccesses + ' succes</span>'; return '<div class="history-item text-sm flex justify-between items-center"><span style="color:var(--fg-dim)">' + h.time + ' — ' + h.pool + 'd seuil ' + h.threshold + '</span>' + l + '</div>'; }).join(''); }
 function clearHistory() { state.diceHistory = []; saveState(); renderHistory(); showToast('Historique efface'); }
-function toggleRules() { const content = document.getElementById('rules-content'), arrow = document.getElementById('rules-arrow'), toggle = document.getElementById('rules-toggle'); const isHidden = content.classList.contains('hidden'); content.classList.toggle('hidden'); arrow.style.transform = isHidden ? 'rotate(180deg)' : ''; toggle.setAttribute('aria-expanded', isHidden); }
+function toggleRules() { var c = document.getElementById('rules-content'), a = document.getElementById('rules-arrow'), t = document.getElementById('rules-toggle'); var h = c.classList.contains('hidden'); c.classList.toggle('hidden'); a.style.transform = h ? 'rotate(180deg)' : ''; t.setAttribute('aria-expanded', h); }
 
-// SCIONS — HTML de la modal réécrit avec la bonne structure de divs
+// === SCIONS ===
 function openScionModal(editId) {
     var scion = editId ? state.scions.find(function(s) { return s.id === editId; }) : null;
-    var pantheonOptions = PANTHEONS.map(function(p) { return '<option value="' + p.id + '" ' + (scion && scion.pantheon === p.id ? 'selected' : '') + '>' + p.name + ' (' + p.region + ')</option>'; }).join('');
-    var callingOptions = CALLINGS.map(function(c) { return '<option value="' + c.id + '">' + c.name + '</option>'; }).join('');
-    var callingsVisual = CALLINGS.map(function(c) { return '<div class="flex items-center gap-2 px-2 py-1.5 rounded" style="background:rgba(255,255,255,.02);border:1px solid ' + c.color + '22"><i class="fa-solid ' + c.icon + ' w-4 text-center text-xs" style="color:' + c.color + '"></i><span class="text-sm" style="color:var(--fg-dim)">' + c.name + '</span></div>'; }).join('');
-    var editIdSafe = editId || 'null';
-
-    var html = '<div class="p-6">' +
-        '<h2 class="section-title mb-6">' + (scion ? 'Modifier le Scion' : 'Nouveau Scion') + '</h2>' +
-        '<div class="space-y-4">' +
-            '<div class="grid grid-cols-2 gap-4">' +
-                '<div><label class="block text-xs uppercase tracking-wider mb-1 font-display" style="color:var(--fg-dim)">Nom du Scion</label><input type="text" id="sc-name" class="input-field" value="' + (scion ? scion.name : '') + '"></div>' +
-                '<div><label class="block text-xs uppercase tracking-wider mb-1 font-display" style="color:var(--fg-dim)">Joueur</label><input type="text" id="sc-player" class="input-field" value="' + (scion ? scion.player : '') + '"></div>' +
-            '</div>' +
-            '<div class="grid grid-cols-2 gap-4">' +
-                '<div><label class="block text-xs uppercase tracking-wider mb-1 font-display" style="color:var(--fg-dim)">Pantheon</label><select id="sc-pantheon" class="input-field">' + pantheonOptions + '</select></div>' +
-                '<div><label class="block text-xs uppercase tracking-wider mb-1 font-display" style="color:var(--fg-dim)">Parent divin</label><input type="text" id="sc-parent" class="input-field" value="' + (scion ? scion.parent : '') + '" placeholder="Zeus, Odin..."></div>' +
-            '</div>' +
-            '<div>' +
-                '<label class="block text-xs uppercase tracking-wider mb-1 font-display" style="color:var(--fg-dim)">Voies (Choisissez-en 3)</label>' +
-                '<div class="grid grid-cols-3 gap-3"><select id="sc-calling1" class="input-field">' + callingOptions + '</select><select id="sc-calling2" class="input-field">' + callingOptions + '</select><select id="sc-calling3" class="input-field">' + callingOptions + '</select></div>' +
-                '<details class="mt-3 text-sm"><summary class="cursor-pointer font-display text-xs uppercase tracking-wider flex items-center gap-2" style="color:var(--gold-dark)"><i class="fa-solid fa-images"></i> Voir les voies</summary><div class="grid grid-cols-2 gap-2 mt-3 p-3 rounded" style="background:var(--bg);border:1px solid var(--border)">' + callingsVisual + '</div></details>' +
-            '</div>' +
-            '<div class="grid grid-cols-2 gap-4">' +
-                '<div><label class="block text-xs uppercase tracking-wider mb-1 font-display" style="color:var(--fg-dim)">Legend actuel</label><input type="number" id="sc-legend" class="input-field" min="0" max="20" value="' + (scion ? scion.legend : 2) + '"></div>' +
-                '<div><label class="block text-xs uppercase tracking-wider mb-1 font-display" style="color:var(--fg-dim)">Legend max</label><input type="number" id="sc-maxlegend" class="input-field" min="1" max="20" value="' + (scion ? scion.maxLegend : 5) + '"></div>' +
-            '</div>' +
-            '<div class="grid grid-cols-2 gap-4">' +
-                '<div><label class="block text-xs uppercase tracking-wider mb-1 font-display" style="color:var(--fg-dim)">Fureur actuelle</label><input type="number" id="sc-rage" class="input-field" min="0" max="20" value="' + (scion ? scion.rage : 0) + '"></div>' +
-                '<div><label class="block text-xs uppercase tracking-wider mb-1 font-display" style="color:var(--fg-dim)">Fureur max</label><input type="number" id="sc-maxrage" class="input-field" min="0" max="20" value="' + (scion ? scion.maxRage : 0) + '"></div>' +
-            '</div>' +
-            '<div><label class="block text-xs uppercase tracking-wider mb-1 font-display" style="color:var(--fg-dim)">Notes</label><textarea id="sc-notes" class="input-field" rows="2">' + (scion ? scion.notes : '') + '</textarea></div>' +
-        '</div>' +
-        '<div class="flex justify-end gap-3 mt-6">' +
-            '<button class="btn-outline btn-sm" onclick="closeModal()">Annuler</button>' +
-            '<button class="btn-gold btn-sm" onclick="saveScion(' + editIdSafe + ')">' + (scion ? 'Modifier' : 'Creer') + '</button>' +
-        '</div>' +
-    '</div>';
-
+    var panOpts = PANTHEONS.map(function(p) { return '<option value="' + p.id + '"' + (scion && scion.pantheon === p.id ? ' selected' : '') + '>' + p.name + ' (' + p.region + ')</option>'; }).join('');
+    var callOpts = CALLINGS.map(function(c) { return '<option value="' + c.id + '">' + c.name + '</option>'; }).join('');
+    var callVis = CALLINGS.map(function(c) { return '<div class="flex items-center gap-2 px-2 py-1.5 rounded" style="background:rgba(255,255,255,.02);border:1px solid ' + c.color + '22"><i class="fa-solid ' + c.icon + ' w-4 text-center text-xs" style="color:' + c.color + '"></i><span class="text-sm" style="color:var(--fg-dim)">' + c.name + '</span></div>'; }).join('');
+    var eid = editId != null ? editId : 'null';
+    var html = '<div class="p-6"><h2 class="section-title mb-6">' + (scion ? 'Modifier le Scion' : 'Nouveau Scion') + '</h2><div class="space-y-4"><div class="grid grid-cols-2 gap-4"><div><label class="block text-xs uppercase tracking-wider mb-1 font-display" style="color:var(--fg-dim)">Nom du Scion</label><input type="text" id="sc-name" class="input-field" value="' + (scion ? scion.name : '') + '"></div><div><label class="block text-xs uppercase tracking-wider mb-1 font-display" style="color:var(--fg-dim)">Joueur</label><input type="text" id="sc-player" class="input-field" value="' + (scion ? scion.player : '') + '"></div></div><div class="grid grid-cols-2 gap-4"><div><label class="block text-xs uppercase tracking-wider mb-1 font-display" style="color:var(--fg-dim)">Pantheon</label><select id="sc-pantheon" class="input-field">' + panOpts + '</select></div><div><label class="block text-xs uppercase tracking-wider mb-1 font-display" style="color:var(--fg-dim)">Parent divin</label><input type="text" id="sc-parent" class="input-field" value="' + (scion ? scion.parent : '') + '" placeholder="Zeus, Odin..."></div></div><div><label class="block text-xs uppercase tracking-wider mb-1 font-display" style="color:var(--fg-dim)">Voies (Choisissez-en 3)</label><div class="grid grid-cols-3 gap-3"><select id="sc-calling1" class="input-field">' + callOpts + '</select><select id="sc-calling2" class="input-field">' + callOpts + '</select><select id="sc-calling3" class="input-field">' + callOpts + '</select></div><details class="mt-3 text-sm"><summary class="cursor-pointer font-display text-xs uppercase tracking-wider flex items-center gap-2" style="color:var(--gold-dark)"><i class="fa-solid fa-images"></i> Voir les voies</summary><div class="grid grid-cols-2 gap-2 mt-3 p-3 rounded" style="background:var(--bg);border:1px solid var(--border)">' + callVis + '</div></details></div><div class="grid grid-cols-2 gap-4"><div><label class="block text-xs uppercase tracking-wider mb-1 font-display" style="color:var(--fg-dim)">Legend actuel</label><input type="number" id="sc-legend" class="input-field" min="0" max="20" value="' + (scion ? scion.legend : 2) + '"></div><div><label class="block text-xs uppercase tracking-wider mb-1 font-display" style="color:var(--fg-dim)">Legend max</label><input type="number" id="sc-maxlegend" class="input-field" min="1" max="20" value="' + (scion ? scion.maxLegend : 5) + '"></div></div><div class="grid grid-cols-2 gap-4"><div><label class="block text-xs uppercase tracking-wider mb-1 font-display" style="color:var(--fg-dim)">Fureur actuelle</label><input type="number" id="sc-rage" class="input-field" min="0" max="20" value="' + (scion ? scion.rage : 0) + '"></div><div><label class="block text-xs uppercase tracking-wider mb-1 font-display" style="color:var(--fg-dim)">Fureur max</label><input type="number" id="sc-maxrage" class="input-field" min="0" max="20" value="' + (scion ? scion.maxRage : 0) + '"></div></div><div><label class="block text-xs uppercase tracking-wider mb-1 font-display" style="color:var(--fg-dim)">Notes</label><textarea id="sc-notes" class="input-field" rows="2">' + (scion ? scion.notes : '') + '</textarea></div></div><div class="flex justify-end gap-3 mt-6"><button class="btn-outline btn-sm" onclick="closeModal()">Annuler</button><button class="btn-gold btn-sm" onclick="saveScion(' + eid + ')">' + (scion ? 'Modifier' : 'Creer') + '</button></div></div>';
     openModal(html);
-
-    if (scion && scion.callings) {
-        document.getElementById('sc-calling1').value = scion.callings[0] || CALLINGS[0].id;
-        document.getElementById('sc-calling2').value = scion.callings[1] || CALLINGS[0].id;
-        document.getElementById('sc-calling3').value = scion.callings[2] || CALLINGS[0].id;
-    }
+    if (scion && scion.callings) { document.getElementById('sc-calling1').value = scion.callings[0] || CALLINGS[0].id; document.getElementById('sc-calling2').value = scion.callings[1] || CALLINGS[0].id; document.getElementById('sc-calling3').value = scion.callings[2] || CALLINGS[0].id; }
 }
-
-function saveScion(editId) { var data = { id: editId || Date.now(), name: document.getElementById('sc-name').value.trim(), player: document.getElementById('sc-player').value.trim(), pantheon: document.getElementById('sc-pantheon').value, parent: document.getElementById('sc-parent').value.trim(), callings: [document.getElementById('sc-calling1').value, document.getElementById('sc-calling2').value, document.getElementById('sc-calling3').value], legend: Math.max(0, parseInt(document.getElementById('sc-legend').value) || 0), maxLegend: Math.max(1, parseInt(document.getElementById('sc-maxlegend').value) || 1), rage: Math.max(0, parseInt(document.getElementById('sc-rage').value) || 0), maxRage: Math.max(0, parseInt(document.getElementById('sc-maxrage').value) || 0), notes: document.getElementById('sc-notes').value.trim() }; if (!data.name) { showToast('Le nom du Scion est requis'); return; } if (editId) { var idx = state.scions.findIndex(function(s) { return s.id === editId; }); if (idx >= 0) state.scions[idx] = data; } else { state.scions.push(data); } saveState(); closeModal(); renderScions(); showToast(editId ? 'Scion modifie' : 'Scion ajoute'); }
+function saveScion(editId) {
+    var data = {id:editId || Date.now(),name:document.getElementById('sc-name').value.trim(),player:document.getElementById('sc-player').value.trim(),pantheon:document.getElementById('sc-pantheon').value,parent:document.getElementById('sc-parent').value.trim(),callings:[document.getElementById('sc-calling1').value,document.getElementById('sc-calling2').value,document.getElementById('sc-calling3').value],legend:Math.max(0,parseInt(document.getElementById('sc-legend').value)||0),maxLegend:Math.max(1,parseInt(document.getElementById('sc-maxlegend').value)||1),rage:Math.max(0,parseInt(document.getElementById('sc-rage').value)||0),maxRage:Math.max(0,parseInt(document.getElementById('sc-maxrage').value)||0),notes:document.getElementById('sc-notes').value.trim()};
+    if (!data.name) { showToast('Le nom du Scion est requis'); return; }
+    if (editId) { var idx = state.scions.findIndex(function(s){return s.id===editId;}); if (idx >= 0) state.scions[idx] = data; } else { state.scions.push(data); }
+    saveState(); closeModal(); renderScions(); showToast(editId ? 'Scion modifie' : 'Scion ajoute');
+}
 function deleteScion(id) { openModal('<div class="p-6 text-center"><i class="fa-solid fa-skull text-3xl mb-4" style="color:var(--crimson-light)"></i><p class="text-lg mb-6">Supprimer ce Scion ?</p><div class="flex justify-center gap-3"><button class="btn-outline btn-sm" onclick="closeModal()">Annuler</button><button class="btn-danger" onclick="confirmDeleteScion(' + id + ')">Supprimer</button></div></div>'); }
-function confirmDeleteScion(id) { state.scions = state.scions.filter(function(s) { return s.id !== id; }); saveState(); closeModal(); renderScions(); showToast('Scion supprime'); }
-function adjustResource(id, resource, delta) { var scion = state.scions.find(function(s) { return s.id === id; }); if (!scion) return; var maxKey = 'max' + resource.charAt(0).toUpperCase() + resource.slice(1); scion[resource] = Math.max(0, Math.min(scion[maxKey] || 99, scion[resource] + delta)); saveState(); renderScions(); }
-function renderScions() { var grid = document.getElementById('scions-grid'); if (!state.scions.length) { grid.innerHTML = '<div class="card p-8 flex flex-col items-center justify-center text-center sm:col-span-2 lg:col-span-3" style="color:var(--fg-dim);min-height:200px"><i class="fa-solid fa-user-plus text-3xl mb-3" style="opacity:.2"></i><p>Aucun Scion</p></div>'; return; } grid.innerHTML = state.scions.map(function(sc) { var pan = PANTHEONS.find(function(p) { return p.id === sc.pantheon; }) || PANTHEONS[0]; var legendPips = ''; for (var i = 0; i < sc.maxLegend; i++) { legendPips += '<span class="pip ' + (i < sc.legend ? 'filled' : '') + '" onclick="adjustResource(' + sc.id + ',\'legend\',1)" oncontextmenu="event.preventDefault();adjustResource(' + sc.id + ',\'legend\',-1)" title="Clic: +1, Clic droit: -1"></span>'; } var rageHTML = ''; if (sc.maxRage > 0) { var ragePips = ''; for (var i = 0; i < sc.maxRage; i++) { ragePips += '<span class="pip rage ' + (i < sc.rage ? 'filled' : '') + '" onclick="adjustResource(' + sc.id + ',\'rage\',1)" oncontextmenu="event.preventDefault();adjustResource(' + sc.id + ',\'rage\',-1)" title="Clic: +1, Clic droit: -1"></span>'; } rageHTML = '<div class="mt-2"><span class="text-xs uppercase tracking-wider font-display" style="color:var(--crimson-light)">Fureur</span><div class="flex gap-1 mt-1">' + ragePips + '</div></div>'; } var callingsBadges = ''; if (sc.callings && Array.isArray(sc.callings)) { callingsBadges = sc.callings.map(function(cId) { var cData = CALLINGS.find(function(c) { return c.id === cId; }); if (cData) return '<span class="px-2 py-0.5 rounded font-display tracking-wider text-xs flex items-center gap-1" style="background:rgba(255,255,255,.03);color:' + cData.color + ';border:1px solid ' + cData.color + '44"><i class="fa-solid ' + cData.icon + '" style="font-size:.6rem"></i>' + cData.name + '</span>'; return ''; }).join(''); } return '<div class="card overflow-hidden"><div class="pantheon-bar h-full absolute left-0 top-0" style="background:' + pan.color + '"></div><div class="p-5 pl-6"><div class="flex items-start justify-between mb-3"><div><h3 class="font-display font-bold text-lg" style="color:var(--fg)">' + sc.name + '</h3><p class="text-sm" style="color:var(--fg-dim)">' + (sc.player || 'Joueur inconnu') + '</p></div><i class="fa-solid ' + pan.icon + ' text-xl" style="color:' + pan.color + '" title="' + pan.name + '"></i></div><div class="flex flex-wrap gap-1.5 mb-3 text-xs">' + (sc.parent ? '<span class="px-2 py-0.5 rounded" style="background:rgba(255,255,255,.03);color:var(--fg-dim);border:1px solid var(--border)">Scion de ' + sc.parent + '</span>' : '') + '</div><div class="flex flex-wrap gap-1.5 mb-4">' + callingsBadges + '</div><div><span class="text-xs uppercase tracking-wider font-display" style="color:var(--gold)">Legend</span><div class="flex gap-1 mt-1">' + legendPips + '</div></div>' + rageHTML + (sc.notes ? '<p class="mt-3 text-sm italic" style="color:var(--fg-dim)">' + sc.notes + '</p>' : '') + '<div class="flex gap-2 mt-4 pt-3" style="border-top:1px solid var(--border)"><button class="btn-outline btn-sm" onclick="openScionModal(' + sc.id + ')"><i class="fa-solid fa-pen mr-1"></i>Modifier</button><button class="btn-danger btn-sm" onclick="deleteScion(' + sc.id + ')"><i class="fa-solid fa-trash mr-1"></i>Supprimer</button></div></div></div></div>'; }).join(''); }
-
-// PANTHEONS
-function renderPantheons() { var grid = document.getElementById('pantheons-grid'); grid.innerHTML = PANTHEONS.map(function(p) { return '<div class="card overflow-hidden"><div class="pantheon-bar h-full absolute left-0 top-0" style="background:' + p.color + '"></div><div class="p-5 pl-6"><div class="flex items-center gap-3 mb-3"><i class="fa-solid ' + p.icon + ' text-2xl" style="color:' + p.color + '"></i><div><h3 class="font-display font-bold text-lg">' + p.name + '</h3><p class="text-xs" style="color:var(--fg-dim)">' + p.region + ' — Purvue : ' + p.purview + '</p></div></div><p class="text-sm leading-relaxed" style="color:var(--fg-dim)">' + p.desc + '</p></div></div></div>'; }).join(''); }
-
-// JOURNAL — HTML de la modal réécrit avec la bonne structure de divs
-function openJournalModal(editId) {
-    var entry = editId ? state.journal.find(function(j) { return j.id === editId; }) : null;
-    var catOptions = JOURNAL_CATS.map(function(c) { return '<option value="' + c.id + '" ' + (entry && entry.category === c.id ? 'selected' : '') + '>' + c.label + '</option>'; }).join('');
-    var editIdSafe = editId || 'null';
-
-    var html = '<div class="p-6">' +
-        '<h2 class="section-title mb-6">' + (entry ? 'Modifier' : 'Nouvelle entree') + '</h2>' +
-        '<div class="space-y-4">' +
-            '<div class="grid grid-cols-2 gap-4">' +
-                '<div><label class="block text-xs uppercase tracking-wider mb-1 font-display" style="color:var(--fg-dim)">Titre</label><input type="text" id="jr-title" class="input-field" value="' + (entry ? entry.title : '') + '"></div>' +
-                '<div><label class="block text-xs uppercase tracking-wider mb-1 font-display" style="color:var(--fg-dim)">Categorie</label><select id="jr-cat" class="input-field">' + catOptions + '</select></div>' +
-            '</div>' +
-            '<div><label class="block text-xs uppercase tracking-wider mb-1 font-display" style="color:var(--fg-dim)"><i class="fa-solid fa-image mr-1"></i>Image (URL)</label><input type="text" id="jr-image" class="input-field" placeholder="https://..." value="' + (entry ? entry.image : '') + '"></div>' +
-            '<div><label class="block text-xs uppercase tracking-wider mb-1 font-display" style="color:var(--fg-dim)">Contenu</label><textarea id="jr-content" class="input-field" rows="6">' + (entry ? entry.content : '') + '</textarea></div>' +
-        '</div>' +
-        '<div class="flex justify-end gap-3 mt-6">' +
-            '<button class="btn-outline btn-sm" onclick="closeModal()">Annuler</button>' +
-            '<button class="btn-gold btn-sm" onclick="saveJournal(' + editIdSafe + ')">Enregistrer</button>' +
-        '</div>' +
-    '</div>';
-
-    openModal(html);
+function confirmDeleteScion(id) { state.scions = state.scions.filter(function(s){return s.id!==id;}); saveState(); closeModal(); renderScions(); showToast('Scion supprime'); }
+function adjustResource(id, resource, delta) { var scion = state.scions.find(function(s){return s.id===id;}); if (!scion) return; var maxKey = 'max' + resource.charAt(0).toUpperCase() + resource.slice(1); scion[resource] = Math.max(0, Math.min(scion[maxKey] || 99, scion[resource] + delta)); saveState(); renderScions(); }
+function renderScions() {
+    var grid = document.getElementById('scions-grid');
+    if (!state.scions.length) { grid.innerHTML = '<div class="card p-8 flex flex-col items-center justify-center text-center sm:col-span-2 lg:col-span-3" style="color:var(--fg-dim);min-height:200px"><i class="fa-solid fa-user-plus text-3xl mb-3" style="opacity:.2"></i><p>Aucun Scion</p></div>'; return; }
+    grid.innerHTML = state.scions.map(function(sc) {
+        var pan = PANTHEONS.find(function(p){return p.id===sc.pantheon;}) || PANTHEONS[0];
+        var legendPips = ''; for (var i = 0; i < sc.maxLegend; i++) legendPips += '<span class="pip ' + (i < sc.legend ? 'filled' : '') + '" onclick="adjustResource(' + sc.id + ',\'legend\',1)" oncontextmenu="event.preventDefault();adjustResource(' + sc.id + ',\'legend\',-1)"></span>';
+        var rageHTML = ''; if (sc.maxRage > 0) { var rp = ''; for (var i = 0; i < sc.maxRage; i++) rp += '<span class="pip rage ' + (i < sc.rage ? 'filled' : '') + '" onclick="adjustResource(' + sc.id + ',\'rage\',1)" oncontextmenu="event.preventDefault();adjustResource(' + sc.id + ',\'rage\',-1)"></span>'; rageHTML = '<div class="mt-2"><span class="text-xs uppercase tracking-wider font-display" style="color:var(--crimson-light)">Fureur</span><div class="flex gap-1 mt-1">' + rp + '</div></div>'; }
+        var cb = ''; if (sc.callings && Array.isArray(sc.callings)) { cb = sc.callings.map(function(cid) { var cd = CALLINGS.find(function(c){return c.id===cid;}); if (cd) return '<span class="px-2 py-0.5 rounded font-display tracking-wider text-xs flex items-center gap-1" style="background:rgba(255,255,255,.03);color:' + cd.color + ';border:1px solid ' + cd.color + '44"><i class="fa-solid ' + cd.icon + '" style="font-size:.6rem"></i>' + cd.name + '</span>'; return ''; }).join(''); }
+        return '<div class="card overflow-hidden"><div class="pantheon-bar h-full absolute left-0 top-0" style="background:' + pan.color + '"></div><div class="p-5 pl-6"><div class="flex items-start justify-between mb-3"><div><h3 class="font-display font-bold text-lg" style="color:var(--fg)">' + sc.name + '</h3><p class="text-sm" style="color:var(--fg-dim)">' + (sc.player || 'Joueur inconnu') + '</p></div><i class="fa-solid ' + pan.icon + ' text-xl" style="color:' + pan.color + '" title="' + pan.name + '"></i></div><div class="flex flex-wrap gap-1.5 mb-3 text-xs">' + (sc.parent ? '<span class="px-2 py-0.5 rounded" style="background:rgba(255,255,255,.03);color:var(--fg-dim);border:1px solid var(--border)">Scion de ' + sc.parent + '</span>' : '') + '</div><div class="flex flex-wrap gap-1.5 mb-4">' + cb + '</div><div><span class="text-xs uppercase tracking-wider font-display" style="color:var(--gold)">Legend</span><div class="flex gap-1 mt-1">' + legendPips + '</div></div>' + rageHTML + (sc.notes ? '<p class="mt-3 text-sm italic" style="color:var(--fg-dim)">' + sc.notes + '</p>' : '') + '<div class="flex gap-2 mt-4 pt-3" style="border-top:1px solid var(--border)"><button class="btn-outline btn-sm" onclick="openScionModal(' + sc.id + ')"><i class="fa-solid fa-pen mr-1"></i>Modifier</button><button class="btn-danger btn-sm" onclick="deleteScion(' + sc.id + ')"><i class="fa-solid fa-trash mr-1"></i>Supprimer</button></div></div></div>';
+    }).join('');
 }
 
-function saveJournal(editId) { var data = { id: editId || Date.now(), title: document.getElementById('jr-title').value.trim(), category: document.getElementById('jr-cat').value, image: document.getElementById('jr-image').value.trim(), content: document.getElementById('jr-content').value.trim(), date: new Date().toLocaleDateString('fr-FR', { day:'numeric', month:'long', year:'numeric' }) }; if (!data.title) { showToast('Le titre est requis'); return; } if (editId) { var idx = state.journal.findIndex(function(j) { return j.id === editId; }); if (idx >= 0) { data.date = state.journal[idx].date; state.journal[idx] = data; } } else { state.journal.unshift(data); } saveState(); closeModal(); renderJournal(); showToast('Journal mis à jour'); }
-function deleteJournal(id) { state.journal = state.journal.filter(function(j) { return j.id !== id; }); saveState(); renderJournal(); showToast('Entree supprimee'); }
-function renderJournal() { var list = document.getElementById('journal-list'); if (!state.journal.length) { list.innerHTML = '<div class="card p-8 text-center" style="color:var(--fg-dim)"><i class="fa-solid fa-book-open text-3xl mb-3" style="opacity:.2"></i><p>Le journal est vide.</p></div>'; return; } list.innerHTML = state.journal.map(function(j) { var cat = JOURNAL_CATS.find(function(c) { return c.id === j.category; }) || JOURNAL_CATS[0]; var imageHTML = j.image ? '<img src="' + j.image + '" alt="Illustration" class="w-full rounded-lg mt-3 mb-3" style="max-height:450px;object-fit:cover;border:1px solid var(--border);" onerror="this.style.display=\'none\'">' : ''; return '<div class="card overflow-hidden"><div class="pantheon-bar h-full absolute left-0 top-0" style="background:' + cat.color + '"></div><div class="p-5 pl-6"><div class="flex items-start justify-between mb-2 flex-wrap gap-2"><div class="flex items-center gap-3"><i class="fa-solid ' + cat.icon + '" style="color:' + cat.color + '"></i><h3 class="font-display font-bold">' + j.title + '</h3></div><span class="text-xs font-display tracking-wider px-2 py-0.5 rounded" style="background:rgba(255,255,255,.03);color:var(--fg-dim);border:1px solid var(--border)">' + cat.label + '</span></div><p class="text-xs mb-2" style="color:var(--fg-dim)">' + j.date + '</p>' + imageHTML + '<p class="text-sm leading-relaxed whitespace-pre-line" style="color:var(--fg-dim)">' + j.content + '</p><div class="flex gap-2 mt-4 pt-3" style="border-top:1px solid var(--border)"><button class="btn-outline btn-sm" onclick="openJournalModal(' + j.id + ')"><i class="fa-solid fa-pen mr-1"></i>Modifier</button><button class="btn-danger btn-sm" onclick="deleteJournal(' + j.id + ')"><i class="fa-solid fa-trash mr-1"></i>Supprimer</button></div></div></div></div>'; }).join(''); }
+// === PANTHEONS ===
+function renderPantheons() { document.getElementById('pantheons-grid').innerHTML = PANTHEONS.map(function(p) { return '<div class="card overflow-hidden"><div class="pantheon-bar h-full absolute left-0 top-0" style="background:' + p.color + '"></div><div class="p-5 pl-6"><div class="flex items-center gap-3 mb-3"><i class="fa-solid ' + p.icon + ' text-2xl" style="color:' + p.color + '"></i><div><h3 class="font-display font-bold text-lg">' + p.name + '</h3><p class="text-xs" style="color:var(--fg-dim)">' + p.region + ' — Purvue : ' + p.purview + '</p></div></div><p class="text-sm leading-relaxed" style="color:var(--fg-dim)">' + p.desc + '</p></div></div></div>'; }).join(''); }
 
-// CAMPAGNE & INIT
+// === JOURNAL ===
+function openJournalModal(editId) {
+    var entry = editId ? state.journal.find(function(j){return j.id===editId;}) : null;
+    var catOpts = JOURNAL_CATS.map(function(c){return '<option value="' + c.id + '"' + (entry && entry.category === c.id ? ' selected' : '') + '>' + c.label + '</option>';}).join('');
+    var eid = editId != null ? editId : 'null';
+    var html = '<div class="p-6"><h2 class="section-title mb-6">' + (entry ? 'Modifier' : 'Nouvelle entree') + '</h2><div class="space-y-4"><div class="grid grid-cols-2 gap-4"><div><label class="block text-xs uppercase tracking-wider mb-1 font-display" style="color:var(--fg-dim)">Titre</label><input type="text" id="jr-title" class="input-field" value="' + (entry ? entry.title : '') + '"></div><div><label class="block text-xs uppercase tracking-wider mb-1 font-display" style="color:var(--fg-dim)">Categorie</label><select id="jr-cat" class="input-field">' + catOpts + '</select></div></div><div><label class="block text-xs uppercase tracking-wider mb-1 font-display" style="color:var(--fg-dim)"><i class="fa-solid fa-image mr-1"></i>Image (URL)</label><input type="text" id="jr-image" class="input-field" placeholder="https://..." value="' + (entry ? entry.image : '') + '"></div><div><label class="block text-xs uppercase tracking-wider mb-1 font-display" style="color:var(--fg-dim)">Contenu</label><textarea id="jr-content" class="input-field" rows="6">' + (entry ? entry.content : '') + '</textarea></div></div><div class="flex justify-end gap-3 mt-6"><button class="btn-outline btn-sm" onclick="closeModal()">Annuler</button><button class="btn-gold btn-sm" onclick="saveJournal(' + eid + ')">Enregistrer</button></div></div>';
+    openModal(html);
+}
+function saveJournal(editId) {
+    var data = {id:editId || Date.now(),title:document.getElementById('jr-title').value.trim(),category:document.getElementById('jr-cat').value,image:document.getElementById('jr-image').value.trim(),content:document.getElementById('jr-content').value.trim(),date:new Date().toLocaleDateString('fr-FR',{day:'numeric',month:'long',year:'numeric'})};
+    if (!data.title) { showToast('Le titre est requis'); return; }
+    if (editId) { var idx = state.journal.findIndex(function(j){return j.id===editId;}); if (idx >= 0) { data.date = state.journal[idx].date; state.journal[idx] = data; } } else { state.journal.unshift(data); }
+    saveState(); closeModal(); renderJournal(); showToast('Journal mis a jour');
+}
+function deleteJournal(id) { state.journal = state.journal.filter(function(j){return j.id!==id;}); saveState(); renderJournal(); showToast('Entree supprimee'); }
+function renderJournal() {
+    var list = document.getElementById('journal-list');
+    if (!state.journal.length) { list.innerHTML = '<div class="card p-8 text-center" style="color:var(--fg-dim)"><i class="fa-solid fa-book-open text-3xl mb-3" style="opacity:.2"></i><p>Le journal est vide.</p></div>'; return; }
+    list.innerHTML = state.journal.map(function(j) {
+        var cat = JOURNAL_CATS.find(function(c){return c.id===j.category;}) || JOURNAL_CATS[0];
+        var img = j.image ? '<img src="' + j.image + '" alt="Illustration" class="w-full rounded-lg mt-3 mb-3" style="max-height:450px;object-fit:cover;border:1px solid var(--border);" onerror="this.style.display=\'none\'">' : '';
+        return '<div class="card overflow-hidden"><div class="pantheon-bar h-full absolute left-0 top-0" style="background:' + cat.color + '"></div><div class="p-5 pl-6"><div class="flex items-start justify-between mb-2 flex-wrap gap-2"><div class="flex items-center gap-3"><i class="fa-solid ' + cat.icon + '" style="color:' + cat.color + '"></i><h3 class="font-display font-bold">' + j.title + '</h3></div><span class="text-xs font-display tracking-wider px-2 py-0.5 rounded" style="background:rgba(255,255,255,.03);color:var(--fg-dim);border:1px solid var(--border)">' + cat.label + '</span></div><p class="text-xs mb-2" style="color:var(--fg-dim)">' + j.date + '</p>' + img + '<p class="text-sm leading-relaxed whitespace-pre-line" style="color:var(--fg-dim)">' + j.content + '</p><div class="flex gap-2 mt-4 pt-3" style="border-top:1px solid var(--border)"><button class="btn-outline btn-sm" onclick="openJournalModal(' + j.id + ')"><i class="fa-solid fa-pen mr-1"></i>Modifier</button><button class="btn-danger btn-sm" onclick="deleteJournal(' + j.id + ')"><i class="fa-solid fa-trash mr-1"></i>Supprimer</button></div></div></div></div>';
+    }).join('');
+}
+
+// === CAMPAGNE & INIT ===
 function loadCampaign() { document.getElementById('campaign-name').value = state.campaign.name || ''; document.getElementById('campaign-saga').value = state.campaign.saga || 'origine'; document.getElementById('campaign-desc').value = state.campaign.desc || ''; }
-function saveCampaign() { state.campaign = { name: document.getElementById('campaign-name').value.trim(), saga: document.getElementById('campaign-saga').value, desc: document.getElementById('campaign-desc').value.trim() }; saveState(); showToast('Campagne sauvegardee'); }
-var observer = new IntersectionObserver(function(entries) { entries.forEach(function(e) { if (e.isIntersecting) e.target.classList.add('visible'); }); }, { threshold: 0.1 });
-function init() { loadCampaign(); renderScions(); renderPantheons(); renderJournal(); renderHistory(); document.querySelectorAll('.reveal').forEach(function(el) { observer.observe(el); }); initRealtimeSync(); }
+function saveCampaign() { state.campaign = {name:document.getElementById('campaign-name').value.trim(),saga:document.getElementById('campaign-saga').value,desc:document.getElementById('campaign-desc').value.trim()}; saveState(); showToast('Campagne sauvegardee'); }
+var observer = new IntersectionObserver(function(entries) { entries.forEach(function(e) { if (e.isIntersecting) e.target.classList.add('visible'); }); }, {threshold: 0.1});
+
+function init() {
+    loadCampaign(); renderScions(); renderPantheons(); renderJournal(); renderHistory();
+    document.querySelectorAll('.reveal').forEach(function(el) { observer.observe(el); });
+    initRealtimeSync();
+    document.getElementById('js-debug').textContent = 'JS: OK | FB: ' + (firebaseOk ? 'OK' : 'LOCAL') + ' | Init: OK';
+}
 init();
 </script>
 </body>
