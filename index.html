@@ -233,30 +233,22 @@
 
 <script>
 /* ========================================
-   DONNEES MODIFIEES
+   DONNEES
    ======================================== */
 
-// PANTEONS : SUPPRESSION DE LA LISTE DES PARENTS
+// PANTEONS (SANS LA LISTE DES DIEUX)
 const PANTHEONS = [
-    { id:'theoi', name:'Theoi', region:'Grece', icon:'fa-bolt', purview:'Mystere', color:'#c9a84c',
-      desc:'Les dieux de l\'Olympe regnent sur le destin des mortels. Leur beaute est parfaite, leurs passions devastatrices, et leur legende inegalee.' },
-    { id:'aesir', name:'Aesir', region:'Scandinavie', icon:'fa-shield-halved', purview:'Givre', color:'#7eb8da',
-      desc:'Les dieux du Nord savent que le Ragnarok vient. Chaque bataille est preparatoire, chaque honneur gagne compte pour le jour final.' },
-    { id:'pesedjet', name:'Pesedjet', region:'Egypte', icon:'fa-eye', purview:'Etoiles', color:'#d4a24e',
-      desc:'Les Ennead maintiennent le Ma\'at contre le Chaos. Leur ordre cosmique est ancien et exigeant.' },
-    { id:'deva', name:'Deva', region:'Inde', icon:'fa-om', purview:'Avatar', color:'#e87d3e',
-      desc:'Les dieux de l\'Inde portent mille visages. Chaque incarnation est une facette de la verite ultime.' },
-    { id:'teotl', name:'Teotl', region:'Mesoamerique', icon:'fa-sun', purview:'Soleil', color:'#c0392b',
-      desc:'Les dieux du Cinquieme Soleil exigent du sang pour maintenir le monde en existence.' },
-    { id:'kami', name:'Kami', region:'Japon', icon:'fa-torii-gate', purview:'Tenebres', color:'#c75b7a',
-      desc:'Les esprits du Japon habitent chaque pierre, chaque riviere, chaque montagne.' },
-    { id:'tuatha', name:'Tuatha De Danann', region:'Celte', icon:'fa-clover', purview:'Prosperite', color:'#27ae60',
-      desc:'La Cour Fabuleuse reside dans le Sidh, entre les mondes. Leur magie est sauvage.' },
-    { id:'orisha', name:'Orisha', region:'Yoruba', icon:'fa-drum', purview:'Fortune', color:'#e67e22',
-      desc:'Les Orisha sont les forces de la nature incarnees, leurs chemins sont innombrables.' }
+    { id:'theoi', name:'Theoi', region:'Grece', icon:'fa-bolt', purview:'Mystere', color:'#c9a84c', desc:'Les dieux de l\'Olympe regnent sur le destin des mortels. Leur beaute est parfaite, leurs passions devastatrices, et leur legende inegalee.' },
+    { id:'aesir', name:'Aesir', region:'Scandinavie', icon:'fa-shield-halved', purview:'Givre', color:'#7eb8da', desc:'Les dieux du Nord savent que le Ragnarok vient. Chaque bataille est preparatoire, chaque honneur gagne compte pour le jour final.' },
+    { id:'pesedjet', name:'Pesedjet', region:'Egypte', icon:'fa-eye', purview:'Etoiles', color:'#d4a24e', desc:'Les Ennead maintiennent le Ma\'at contre le Chaos. Leur ordre cosmique est ancien et exigeant.' },
+    { id:'deva', name:'Deva', region:'Inde', icon:'fa-om', purview:'Avatar', color:'#e87d3e', desc:'Les dieux de l\'Inde portent mille visages. Chaque incarnation est une facette de la verite ultime.' },
+    { id:'teotl', name:'Teotl', region:'Mesoamerique', icon:'fa-sun', purview:'Soleil', color:'#c0392b', desc:'Les dieux du Cinquieme Soleil exigent du sang pour maintenir le monde en existence.' },
+    { id:'kami', name:'Kami', region:'Japon', icon:'fa-torii-gate', purview:'Tenebres', color:'#c75b7a', desc:'Les esprits du Japon habitent chaque pierre, chaque riviere, chaque montagne.' },
+    { id:'tuatha', name:'Tuatha De Danann', region:'Celte', icon:'fa-clover', purview:'Prosperite', color:'#27ae60', desc:'La Cour Fabuleuse reside dans le Sidh, entre les mondes. Leur magie est sauvage.' },
+    { id:'orisha', name:'Orisha', region:'Yoruba', icon:'fa-drum', purview:'Fortune', color:'#e67e22', desc:'Les Orisha sont les forces de la nature incarnees, leurs chemins sont innombrables.' }
 ];
 
-// VOIES : AJOUT DES ICONES ET COULEURS POUR LE RESUME VISUEL
+// VOIES AVEC ICONES
 const CALLINGS = [
     { id:'createur', name:'Créateur', icon:'fa-palette', color:'#e67e22' },
     { id:'gardien', name:'Gardien', icon:'fa-shield-halved', color:'#3498db' },
@@ -270,9 +262,6 @@ const CALLINGS = [
     { id:'trompeur', name:'Trompeur', icon:'fa-masks-theater', color:'#d35400' },
     { id:'guerrier', name:'Guerrier', icon:'fa-khanda', color:'#c0392b' }
 ];
-
-// ORIGINES DIVINES 2E EDITION
-const ORIGINS = ['Enfant Légitime', 'Bâtard', 'Engendré', 'Adopté', 'Avatar', 'Éveillé'];
 
 const JOURNAL_CATS = [
     { id:'session', label:'Session', icon:'fa-book-open', color:'var(--gold)' },
@@ -449,16 +438,12 @@ function clearHistory() { state.diceHistory = []; saveState(); renderHistory(); 
 function toggleRules() { const content = document.getElementById('rules-content'), arrow = document.getElementById('rules-arrow'), toggle = document.getElementById('rules-toggle'); const isHidden = content.classList.contains('hidden'); content.classList.toggle('hidden'); arrow.style.transform = isHidden ? 'rotate(180deg)' : ''; toggle.setAttribute('aria-expanded', isHidden); }
 
 /* ========================================
-   GESTION DES SCIONS (MISE A JOUR 2E EDITION)
+   GESTION DES SCIONS
    ======================================== */
 function openScionModal(editId) {
     const scion = editId ? state.scions.find(s => s.id === editId) : null;
     
-    // Menus déroulants basiques
     const pantheonOptions = PANTHEONS.map(p => `<option value="${p.id}" ${scion?.pantheon === p.id ? 'selected' : ''}>${p.name} (${p.region})</option>`).join('');
-    const originOptions = ORIGINS.map(o => `<option value="${o}" ${scion?.origin === o ? 'selected' : ''}>${o}</option>`).join('');
-    
-    // Menus des 3 Voies
     const callingOptions = CALLINGS.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
 
     // RESUME VISUEL DES VOIES
@@ -481,9 +466,6 @@ function openScionModal(editId) {
                     <div><label class="block text-xs uppercase tracking-wider mb-1 font-display" style="color:var(--fg-dim)">Pantheon</label><select id="sc-pantheon" class="input-field">${pantheonOptions}</select></div>
                     <div><label class="block text-xs uppercase tracking-wider mb-1 font-display" style="color:var(--fg-dim)">Parent divin</label><input type="text" id="sc-parent" class="input-field" value="${scion?.parent || ''}" placeholder="Zeus, Odin..."></div>
                 </div>
-                
-                <!-- ORIGINE DIVINE 2E EDITION -->
-                <div><label class="block text-xs uppercase tracking-wider mb-1 font-display" style="color:var(--fg-dim)">Origine Divine</label><select id="sc-origin" class="input-field">${originOptions}</select></div>
 
                 <!-- 3 VOIES 2E EDITION -->
                 <div>
@@ -510,8 +492,6 @@ function openScionModal(editId) {
                     <div><label class="block text-xs uppercase tracking-wider mb-1 font-display" style="color:var(--fg-dim)">Legend max</label><input type="number" id="sc-maxlegend" class="input-field" min="1" max="20" value="${scion?.maxLegend ?? 5}"></div>
                 </div>
                 
-                <!-- SUPPRESSION DE LA VOLONTE -->
-
                 <div class="grid grid-cols-2 gap-4">
                     <div><label class="block text-xs uppercase tracking-wider mb-1 font-display" style="color:var(--fg-dim)">Fureur actuelle</label><input type="number" id="sc-rage" class="input-field" min="0" max="20" value="${scion?.rage ?? 0}"></div>
                     <div><label class="block text-xs uppercase tracking-wider mb-1 font-display" style="color:var(--fg-dim)">Fureur max</label><input type="number" id="sc-maxrage" class="input-field" min="0" max="20" value="${scion?.maxRage ?? 0}"></div>
@@ -540,7 +520,6 @@ function saveScion(editId) {
         player: document.getElementById('sc-player').value.trim(),
         pantheon: document.getElementById('sc-pantheon').value,
         parent: document.getElementById('sc-parent').value.trim(),
-        origin: document.getElementById('sc-origin').value,
         callings: [
             document.getElementById('sc-calling1').value,
             document.getElementById('sc-calling2').value,
@@ -579,14 +558,11 @@ function renderScions() {
     grid.innerHTML = state.scions.map(sc => {
         const pan = PANTHEONS.find(p => p.id === sc.pantheon) || PANTHEONS[0];
         
-        // Pips Legend
         let legendPips = ''; for (let i = 0; i < sc.maxLegend; i++) { legendPips += `<span class="pip ${i < sc.legend ? 'filled' : ''}" onclick="adjustResource(${sc.id},'legend',1)" oncontextmenu="event.preventDefault();adjustResource(${sc.id},'legend',-1)" title="Clic: +1, Clic droit: -1"></span>`; }
         
-        // Pips Fureur
         let rageHTML = '';
         if (sc.maxRage > 0) { let ragePips = ''; for (let i = 0; i < sc.maxRage; i++) { ragePips += `<span class="pip rage ${i < sc.rage ? 'filled' : ''}" onclick="adjustResource(${sc.id},'rage',1)" oncontextmenu="event.preventDefault();adjustResource(${sc.id},'rage',-1)" title="Clic: +1, Clic droit: -1"></span>`; } rageHTML = `<div class="mt-2"><span class="text-xs uppercase tracking-wider font-display" style="color:var(--crimson-light)">Fureur</span><div class="flex gap-1 mt-1">${ragePips}</div></div>`; }
 
-        // Badges des 3 Voies
         let callingsBadges = '';
         if(sc.callings && Array.isArray(sc.callings)) { callingsBadges = sc.callings.map(cId => { const cData = CALLINGS.find(c => c.id === cId); if(cData) return `<span class="px-2 py-0.5 rounded font-display tracking-wider text-xs flex items-center gap-1" style="background:rgba(255,255,255,.03);color:${cData.color};border:1px solid ${cData.color}44"><i class="fa-solid ${cData.icon}" style="font-size:.6rem"></i>${cData.name}</span>`; return ''; }).join(''); }
 
@@ -599,7 +575,6 @@ function renderScions() {
                 </div>
                 
                 <div class="flex flex-wrap gap-1.5 mb-3 text-xs">
-                    <span class="px-2 py-0.5 rounded" style="background:rgba(201,168,76,.1);color:var(--gold);border:1px solid var(--gold-dark)">${sc.origin}</span>
                     ${sc.parent ? `<span class="px-2 py-0.5 rounded" style="background:rgba(255,255,255,.03);color:var(--fg-dim);border:1px solid var(--border)">Fils de ${sc.parent}</span>` : ''}
                 </div>
 
@@ -622,7 +597,6 @@ function renderScions() {
    ======================================== */
 function renderPantheons() {
     const grid = document.getElementById('pantheons-grid');
-    // ATTENTION : AUCUN DETAILS / AUCUNE LISTE DE PARENTS ICI
     grid.innerHTML = PANTHEONS.map(p => `
         <div class="card overflow-hidden">
             <div class="pantheon-bar h-full absolute left-0 top-0" style="background:${p.color}"></div>
