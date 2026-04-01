@@ -568,7 +568,7 @@ function renderScions() {
                 </div>
                 
                 <div class="flex flex-wrap gap-1.5 mb-3 text-xs">
-                    ${sc.parent ? `<span class="px-2 py-0.5 rounded" style="background:rgba(255,255,255,.03);color:var(--fg-dim);border:1px solid var(--border)">Fils de ${sc.parent}</span>` : ''}
+                    ${sc.parent ? `<span class="px-2 py-0.5 rounded" style="background:rgba(255,255,255,.03);color:var(--fg-dim);border:1px solid var(--border)">Scion de ${sc.parent}</span>` : ''}
                 </div>
 
                 <div class="flex flex-wrap gap-1.5 mb-4">${callingsBadges}</div>
@@ -622,7 +622,6 @@ function openJournalModal(editId) {
                     <div><label class="block text-xs uppercase tracking-wider mb-1 font-display" style="color:var(--fg-dim)">Titre</label><input type="text" id="jr-title" class="input-field" value="${entry?.title || ''}"></div>
                     <div><label class="block text-xs uppercase tracking-wider mb-1 font-display" style="color:var(--fg-dim)">Categorie</label><select id="jr-cat" class="input-field">${catOptions}</select></div>
                 </div>
-                <!-- NOUVEAU CHAMP IMAGE -->
                 <div><label class="block text-xs uppercase tracking-wider mb-1 font-display" style="color:var(--fg-dim)"><i class="fa-solid fa-image mr-1"></i>Image (URL)</label><input type="text" id="jr-image" class="input-field" placeholder="https://exemple.com/image.jpg" value="${entry?.image || ''}"></div>
                 <div><label class="block text-xs uppercase tracking-wider mb-1 font-display" style="color:var(--fg-dim)">Contenu</label><textarea id="jr-content" class="input-field" rows="6">${entry?.content || ''}</textarea></div>
             </div>
@@ -639,7 +638,7 @@ function saveJournal(editId) {
         id: editId || Date.now(), 
         title: document.getElementById('jr-title').value.trim(), 
         category: document.getElementById('jr-cat').value, 
-        image: document.getElementById('jr-image').value.trim(), // SAUVEGARDE DE L'IMAGE
+        image: document.getElementById('jr-image').value.trim(), 
         content: document.getElementById('jr-content').value.trim(), 
         date: new Date().toLocaleDateString('fr-FR', { day:'numeric', month:'long', year:'numeric' }) 
     };
@@ -662,8 +661,6 @@ function renderJournal() {
     list.innerHTML = state.journal.map(j => { 
         const cat = JOURNAL_CATS.find(c => c.id === j.category) || JOURNAL_CATS[0]; 
         
-        // AFFICHAGE CONDITIONNEL DE L'IMAGE
-        // onerror="this.style.display='none'" permet de cacher l'image discrètement si le lien est cassé
         const imageHTML = j.image ? `<img src="${j.image}" alt="Illustration de ${j.title}" class="w-full rounded-lg mt-3 mb-3" style="max-height: 450px; object-fit: cover; border: 1px solid var(--border);" onerror="this.style.display='none'">` : '';
 
         return `<div class="card overflow-hidden">
