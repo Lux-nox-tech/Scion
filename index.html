@@ -56,7 +56,11 @@
         .img-preview{margin-top:10px;display:none;border-radius:6px;overflow:hidden;border:1px solid var(--border);background:#0a0a12;max-height:160px;align-items:center;justify-content:center}
         .img-preview img{max-width:100%;max-height:160px;object-fit:contain;display:block}
         .img-preview.show{display:flex;animation:journalIn .3s ease-out}
-        @media(max-width:640px){.die-face{width:38px;height:38px;font-size:1rem}.journal-entry .entry-image-wrap img{max-height:350px}}
+        .j-filter{display:inline-flex;align-items:center;font-family:'Cinzel',serif;font-size:.65rem;font-weight:600;letter-spacing:.08em;text-transform:uppercase;padding:.4rem .85rem;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--fg-dim);cursor:pointer;transition:all .25s;white-space:nowrap}
+        .j-filter:hover{border-color:var(--gold-dark);color:var(--fg);background:rgba(201,168,76,.05)}
+        .j-filter-count{font-size:.58rem;margin-left:.4rem;padding:1px 6px;border-radius:10px;background:rgba(255,255,255,.06);color:inherit}
+        .j-filter.active .j-filter-count{background:rgba(255,255,255,.1)}
+        @media(max-width:640px){.die-face{width:38px;height:38px;font-size:1rem}.journal-entry .entry-image-wrap img{max-height:350px}.j-filter{font-size:.58rem;padding:.35rem .7rem}}
         @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important}}
     </style>
 </head>
@@ -176,7 +180,11 @@
                         <span id="j-status-text">Actif</span>
                     </div>
                 </div>
-                <p class="text-sm mb-8" style="color:var(--fg-dim);font-style:italic">Chroniques du monde divin, accessibles a tous les visiteurs.</p>
+                <p class="text-sm mb-6" style="color:var(--fg-dim);font-style:italic">Chroniques du monde divin, accessibles a tous les visiteurs.</p>
+
+                <!-- Filtres par categorie -->
+                <div id="journal-filters" class="flex flex-wrap gap-2 mb-8"></div>
+
                 <div id="journal-list" class="space-y-5 mb-10">
                     <div class="card p-8 text-center" style="color:var(--fg-dim)"><i class="fa-solid fa-book-open text-3xl mb-3" style="opacity:.2"></i><p>Le journal est vide.</p></div>
                 </div>
@@ -227,22 +235,7 @@ var state=loadState();
 function defaultState(){return{campaign:{name:'',saga:'origine',desc:''},scions:[],diceHistory:[]};}
 function loadState(){try{var s=JSON.parse(localStorage.getItem('scion-campaign'));if(s&&typeof s==='object')return s;}catch(e){}return defaultState();}
 function saveState(){if(!Array.isArray(state.scions))state.scions=[];if(!Array.isArray(state.diceHistory))state.diceHistory=[];try{localStorage.setItem('scion-campaign',JSON.stringify(state));if(firebaseOk&&db)db.ref('scionData').set(state).catch(function(){});}catch(e){}}
-
-/* ===== FIX : protection des tableaux APRES le remplacement Firebase ===== */
-function initRealtimeSync(){
-    if(!firebaseOk||!db)return;
-    db.ref('scionData').on('value',function(snap){
-        var r=snap.val();
-        if(r&&typeof r==='object'){
-            state=r;
-            /* Ces 2 lignes empêchent scions d'être null/objet au lieu de tableau */
-            if(!Array.isArray(state.scions))state.scions=[];
-            if(!Array.isArray(state.diceHistory))state.diceHistory=[];
-            try{localStorage.setItem('scion-campaign',JSON.stringify(state));}catch(e){}
-            loadCampaign();renderScions();renderHistory();
-        }
-    },function(){});
-}
+function initRealtimeSync(){if(!firebaseOk||!db)return;db.ref('scionData').on('value',function(snap){var r=snap.val();if(r&&typeof r==='object'){state=r;if(!Array.isArray(state.scions))state.scions=[];if(!Array.isArray(state.diceHistory))state.diceHistory=[];try{localStorage.setItem('scion-campaign',JSON.stringify(state));}catch(e){}loadCampaign();renderScions();renderHistory();}},function(){});}
 
 var canvas=document.getElementById('particles-canvas'),ctx=canvas.getContext('2d'),particles=[];
 function resizeCanvas(){canvas.width=window.innerWidth;canvas.height=window.innerHeight;}resizeCanvas();window.addEventListener('resize',resizeCanvas);
@@ -271,41 +264,85 @@ function toggleRules(){var c=document.getElementById('rules-content'),a=document
 
 function openScionModal(editId){var sc=editId?state.scions.find(function(s){return s.id===editId;}):null;var po=PANTHEONS.map(function(p){return'<option value="'+p.id+'"'+(sc&&sc.pantheon===p.id?' selected':'')+'>'+p.name+' ('+p.region+')</option>';}).join('');var co=CALLINGS.map(function(c){return'<option value="'+c.id+'">'+c.name+'</option>';}).join('');var eid=editId!=null?editId:'null';var h='<div class="p-6"><h2 class="section-title mb-6">'+(sc?'Modifier le Scion':'Nouveau Scion')+'</h2><div class="space-y-4"><div class="grid grid-cols-2 gap-4"><div><label class="block text-xs uppercase tracking-wider mb-1 font-display" style="color:var(--fg-dim)">Nom</label><input type="text" id="sc-name" class="input-field" value="'+(sc?esc(sc.name):'')+'"></div><div><label class="block text-xs uppercase tracking-wider mb-1 font-display" style="color:var(--fg-dim)">Joueur</label><input type="text" id="sc-player" class="input-field" value="'+(sc?esc(sc.player):'')+'"></div></div><div class="grid grid-cols-2 gap-4"><div><label class="block text-xs uppercase tracking-wider mb-1 font-display" style="color:var(--fg-dim)">Pantheon</label><select id="sc-pantheon" class="input-field">'+po+'</select></div><div><label class="block text-xs uppercase tracking-wider mb-1 font-display" style="color:var(--fg-dim)">Parent divin</label><input type="text" id="sc-parent" class="input-field" value="'+(sc?esc(sc.parent):'')+'"></div></div><div><label class="block text-xs uppercase tracking-wider mb-1 font-display" style="color:var(--fg-dim)">Voies (3)</label><div class="grid grid-cols-3 gap-3"><select id="sc-c1" class="input-field">'+co+'</select><select id="sc-c2" class="input-field">'+co+'</select><select id="sc-c3" class="input-field">'+co+'</select></div></div><div class="grid grid-cols-2 gap-4"><div><label class="block text-xs uppercase tracking-wider mb-1 font-display" style="color:var(--fg-dim)">Legend</label><input type="number" id="sc-leg" class="input-field" min="0" max="20" value="'+(sc?sc.legend:2)+'"></div><div><label class="block text-xs uppercase tracking-wider mb-1 font-display" style="color:var(--fg-dim)">Legend max</label><input type="number" id="sc-legmax" class="input-field" min="1" max="20" value="'+(sc?sc.maxLegend:5)+'"></div></div><div class="grid grid-cols-2 gap-4"><div><label class="block text-xs uppercase tracking-wider mb-1 font-display" style="color:var(--fg-dim)">Fureur</label><input type="number" id="sc-rage" class="input-field" min="0" max="20" value="'+(sc?sc.rage:0)+'"></div><div><label class="block text-xs uppercase tracking-wider mb-1 font-display" style="color:var(--fg-dim)">Fureur max</label><input type="number" id="sc-ragemax" class="input-field" min="0" max="20" value="'+(sc?sc.maxRage:0)+'"></div></div><div><label class="block text-xs uppercase tracking-wider mb-1 font-display" style="color:var(--fg-dim)">Notes</label><textarea id="sc-notes" class="input-field" rows="2">'+(sc?esc(sc.notes):'')+'</textarea></div></div><div class="flex justify-end gap-3 mt-6"><button class="btn-outline btn-sm" onclick="closeModal()">Annuler</button><button class="btn-gold btn-sm" onclick="saveScion('+eid+')">'+(sc?'Modifier':'Creer')+'</button></div></div>';openModal(h);if(sc&&sc.callings){document.getElementById('sc-c1').value=sc.callings[0]||CALLINGS[0].id;document.getElementById('sc-c2').value=sc.callings[1]||CALLINGS[0].id;document.getElementById('sc-c3').value=sc.callings[2]||CALLINGS[0].id;}}
 
-/* ===== FIX : try/catch pour que le bug ne soit plus silencieux ===== */
-function saveScion(editId){
-    try{
-        if(!Array.isArray(state.scions))state.scions=[];
-        var d={id:editId||Date.now(),name:document.getElementById('sc-name').value.trim(),player:document.getElementById('sc-player').value.trim(),pantheon:document.getElementById('sc-pantheon').value,parent:document.getElementById('sc-parent').value.trim(),callings:[document.getElementById('sc-c1').value,document.getElementById('sc-c2').value,document.getElementById('sc-c3').value],legend:Math.max(0,parseInt(document.getElementById('sc-leg').value)||0),maxLegend:Math.max(1,parseInt(document.getElementById('sc-legmax').value)||1),rage:Math.max(0,parseInt(document.getElementById('sc-rage').value)||0),maxRage:Math.max(0,parseInt(document.getElementById('sc-ragemax').value)||0),notes:document.getElementById('sc-notes').value.trim()};
-        if(!d.name){showToast('Le nom est requis');return;}
-        if(editId){var idx=state.scions.findIndex(function(s){return s.id===editId;});if(idx>=0)state.scions[idx]=d;}else{state.scions.push(d);}
-        saveState();closeModal();renderScions();showToast(editId?'Scion modifie':'Scion ajoute');
-    }catch(err){
-        console.error('Erreur saveScion:',err);
-        showToast('Erreur : '+err.message);
-    }
-}
-
+function saveScion(editId){try{if(!Array.isArray(state.scions))state.scions=[];var d={id:editId||Date.now(),name:document.getElementById('sc-name').value.trim(),player:document.getElementById('sc-player').value.trim(),pantheon:document.getElementById('sc-pantheon').value,parent:document.getElementById('sc-parent').value.trim(),callings:[document.getElementById('sc-c1').value,document.getElementById('sc-c2').value,document.getElementById('sc-c3').value],legend:Math.max(0,parseInt(document.getElementById('sc-leg').value)||0),maxLegend:Math.max(1,parseInt(document.getElementById('sc-legmax').value)||1),rage:Math.max(0,parseInt(document.getElementById('sc-rage').value)||0),maxRage:Math.max(0,parseInt(document.getElementById('sc-ragemax').value)||0),notes:document.getElementById('sc-notes').value.trim()};if(!d.name){showToast('Le nom est requis');return;}if(editId){var idx=state.scions.findIndex(function(s){return s.id===editId;});if(idx>=0)state.scions[idx]=d;}else{state.scions.push(d);}saveState();closeModal();renderScions();showToast(editId?'Scion modifie':'Scion ajoute');}catch(err){console.error('Erreur saveScion:',err);showToast('Erreur : '+err.message);}}
 function deleteScion(id){openModal('<div class="p-6 text-center"><i class="fa-solid fa-skull text-3xl mb-4" style="color:var(--crimson-light)"></i><p class="text-lg mb-6">Supprimer ce Scion ?</p><div class="flex justify-center gap-3"><button class="btn-outline btn-sm" onclick="closeModal()">Annuler</button><button class="btn-danger" onclick="confirmDelScion('+id+')">Supprimer</button></div></div>');}
 function confirmDelScion(id){if(!Array.isArray(state.scions))state.scions=[];state.scions=state.scions.filter(function(s){return s.id!==id;});saveState();closeModal();renderScions();showToast('Scion supprime');}
 function adjustRes(id,r,d){if(!Array.isArray(state.scions))return;var s=state.scions.find(function(x){return x.id===id;});if(!s)return;var mk='max'+r.charAt(0).toUpperCase()+r.slice(1);s[r]=Math.max(0,Math.min(s[mk]||99,s[r]+d));saveState();renderScions();}
 function renderScions(){var g=document.getElementById('scions-grid');if(!state.scions||!Array.isArray(state.scions)||!state.scions.length){g.innerHTML='<div class="card p-8 flex flex-col items-center justify-center text-center sm:col-span-2 lg:col-span-3" style="color:var(--fg-dim);min-height:200px"><i class="fa-solid fa-user-plus text-3xl mb-3" style="opacity:.2"></i><p>Aucun Scion</p></div>';return;}g.innerHTML=state.scions.map(function(sc){var pan=PANTHEONS.find(function(p){return p.id===sc.pantheon;})||PANTHEONS[0];var lp='';for(var i=0;i<sc.maxLegend;i++)lp+='<span class="pip '+(i<sc.legend?'filled':'')+'" onclick="adjustRes('+sc.id+',\'legend\',1)" oncontextmenu="event.preventDefault();adjustRes('+sc.id+',\'legend\',-1)"></span>';var rh='';if(sc.maxRage>0){var rp='';for(var i=0;i<sc.maxRage;i++)rp+='<span class="pip rage '+(i<sc.rage?'filled':'')+'" onclick="adjustRes('+sc.id+',\'rage\',1)" oncontextmenu="event.preventDefault();adjustRes('+sc.id+',\'rage\',-1)"></span>';rh='<div class="mt-2"><span class="text-xs uppercase tracking-wider font-display" style="color:var(--crimson-light)">Fureur</span><div class="flex gap-1 mt-1">'+rp+'</div></div>';}var cb='';if(sc.callings&&Array.isArray(sc.callings)){cb=sc.callings.map(function(cid){var cd=CALLINGS.find(function(c){return c.id===cid;});if(cd)return'<span class="px-2 py-0.5 rounded font-display tracking-wider text-xs flex items-center gap-1" style="background:rgba(255,255,255,.03);color:'+cd.color+';border:1px solid '+cd.color+'44"><i class="fa-solid '+cd.icon+'" style="font-size:.6rem"></i>'+cd.name+'</span>';return'';}).join('');}return'<div class="card overflow-hidden"><div class="pantheon-bar h-full absolute left-0 top-0" style="background:'+pan.color+'"></div><div class="p-5 pl-6"><div class="flex items-start justify-between mb-3"><div><h3 class="font-display font-bold text-lg" style="color:var(--fg)">'+esc(sc.name)+'</h3><p class="text-sm" style="color:var(--fg-dim)">'+esc(sc.player||'Joueur inconnu')+'</p></div><i class="fa-solid '+pan.icon+' text-xl" style="color:'+pan.color+'"></i></div><div class="flex flex-wrap gap-1.5 mb-3 text-xs">'+(sc.parent?'<span class="px-2 py-0.5 rounded" style="background:rgba(255,255,255,.03);color:var(--fg-dim);border:1px solid var(--border)">Scion de '+esc(sc.parent)+'</span>':'')+'</div><div class="flex flex-wrap gap-1.5 mb-4">'+cb+'</div><div><span class="text-xs uppercase tracking-wider font-display" style="color:var(--gold)">Legend</span><div class="flex gap-1 mt-1">'+lp+'</div></div>'+rh+(sc.notes?'<p class="mt-3 text-sm italic" style="color:var(--fg-dim)">'+esc(sc.notes)+'</p>':'')+'<div class="flex gap-2 mt-4 pt-3" style="border-top:1px solid var(--border)"><button class="btn-outline btn-sm" onclick="openScionModal('+sc.id+')"><i class="fa-solid fa-pen mr-1"></i>Modifier</button><button class="btn-danger btn-sm" onclick="deleteScion('+sc.id+')"><i class="fa-solid fa-trash mr-1"></i>Supprimer</button></div></div></div>';}).join('');}
 
-function renderPantheons(){
-    document.getElementById('pantheons-grid').innerHTML=PANTHEONS.map(function(p){
-        return'<div class="card overflow-hidden"><div class="pantheon-bar h-full absolute left-0 top-0" style="background:'+p.color+'"></div><div class="p-5 pl-6"><div class="flex items-center gap-3 mb-3"><i class="fa-solid '+p.icon+' text-2xl" style="color:'+p.color+'"></i><div><h3 class="font-display font-bold text-lg">'+p.name+'</h3><p class="text-xs" style="color:var(--fg-dim)">'+p.region+'</p></div></div><p class="text-sm leading-relaxed" style="color:var(--fg-dim)">'+p.desc+'</p></div></div>';
-    }).join('');
+function renderPantheons(){document.getElementById('pantheons-grid').innerHTML=PANTHEONS.map(function(p){return'<div class="card overflow-hidden"><div class="pantheon-bar h-full absolute left-0 top-0" style="background:'+p.color+'"></div><div class="p-5 pl-6"><div class="flex items-center gap-3 mb-3"><i class="fa-solid '+p.icon+' text-2xl" style="color:'+p.color+'"></i><div><h3 class="font-display font-bold text-lg">'+p.name+'</h3><p class="text-xs" style="color:var(--fg-dim)">'+p.region+'</p></div></div><p class="text-sm leading-relaxed" style="color:var(--fg-dim)">'+p.desc+'</p></div></div>';}).join('');}
+
+/* ===== JOURNAL MONDIAL — avec filtres par categorie ===== */
+var currentFilter='all';
+var allJournalMsgs=[];
+
+function setJournalFilter(cat){currentFilter=cat;renderJournalFilters();renderFilteredJournal();}
+
+function renderJournalFilters(){
+    var el=document.getElementById('journal-filters');
+    /* Bouton "Tout" toujours visible */
+    var total=allJournalMsgs.length;
+    var isAllActive=currentFilter==='all';
+    var html='<button class="j-filter'+(isAllActive?' active':'')+'" style="'+(isAllActive?'border-color:var(--gold);color:var(--gold);background:rgba(201,168,76,.08);box-shadow:0 0 12px rgba(201,168,76,.15);':'')+'" onclick="setJournalFilter(\'all\')"><i class="fa-solid fa-layer-group mr-1.5"></i>Tout<span class="j-filter-count">'+total+'</span></button>';
+    /* Un bouton par categorie ayant au moins 1 entree */
+    var catKeys=Object.keys(JOURNAL_CATS);
+    for(var i=0;i<catKeys.length;i++){
+        var key=catKeys[i];
+        var cat=JOURNAL_CATS[key];
+        var count=0;
+        for(var j=0;j<allJournalMsgs.length;j++){if(allJournalMsgs[j].category===key)count++;}
+        if(count===0)continue;
+        var isActive=currentFilter===key;
+        var activeStyle=isActive?'border-color:'+cat.color+';color:'+cat.color+';background:'+cat.color+'12;box-shadow:0 0 12px '+cat.color+'22;':'';
+        html+='<button class="j-filter'+(isActive?' active':'')+'" style="'+activeStyle+'" onclick="setJournalFilter(\''+key+'\')"><i class="fa-solid '+cat.icon+' mr-1.5"></i>'+cat.label+'<span class="j-filter-count">'+count+'</span></button>';
+    }
+    el.innerHTML=html;
+}
+
+function renderFilteredJournal(){
+    if(currentFilter==='all'){renderJournal(allJournalMsgs);return;}
+    var filtered=[];
+    for(var i=0;i<allJournalMsgs.length;i++){if(allJournalMsgs[i].category===currentFilter)filtered.push(allJournalMsgs[i]);}
+    renderJournal(filtered);
 }
 
 var jImgTimeout=null;
 document.getElementById('j-image').addEventListener('input',function(){clearTimeout(jImgTimeout);jImgTimeout=setTimeout(function(){var url=document.getElementById('j-image').value.trim();var prev=document.getElementById('j-img-preview');var prevImg=document.getElementById('j-img-preview-img');if(url){var test=new Image();test.onload=function(){prevImg.src=url;prev.classList.add('show');};test.onerror=function(){prev.classList.remove('show');};test.src=url;}else{prev.classList.remove('show');}},400);});
 
 function publishJournal(){var title=document.getElementById('j-title').value.trim();var cat=document.getElementById('j-cat').value;var image=document.getElementById('j-image').value.trim();var content=document.getElementById('j-content').value.trim();if(!title){showToast('Entre un titre');return;}if(!content){showToast('Ecris du contenu');return;}var entry={title:title,category:cat,image:image,content:content,date:firebaseOk?firebase.database.ServerValue.TIMESTAMP:Date.now()};document.getElementById('j-title').value='';document.getElementById('j-cat').value='chronique';document.getElementById('j-image').value='';document.getElementById('j-content').value='';document.getElementById('j-img-preview').classList.remove('show');if(firebaseOk&&db){db.ref('scionJournal').push(entry).then(function(){showToast('Entree publiee');}).catch(function(err){console.error('Erreur:',err);saveJournalLocal(entry);showToast('Sauvegarde locale');});}else{saveJournalLocal(entry);showToast('Sauvegarde locale');}}
-function saveJournalLocal(data){var arr=JSON.parse(localStorage.getItem('scion-journal')||'[]');data.id='local_'+Date.now();arr.unshift(data);localStorage.setItem('scion-journal',JSON.stringify(arr));renderJournal(arr);}
-function deleteJournalEntry(id){if(!confirm('Supprimer cette entree ?'))return;if(firebaseOk&&db&&id.indexOf('local_')!==0){db.ref('scionJournal/'+id).remove();}else{var arr=JSON.parse(localStorage.getItem('scion-journal')||'[]');arr=arr.filter(function(m){return m.id!==id;});localStorage.setItem('scion-journal',JSON.stringify(arr));renderJournal(arr);}showToast('Entree supprimee');}
+
+function saveJournalLocal(data){
+    var arr=JSON.parse(localStorage.getItem('scion-journal')||'[]');
+    data.id='local_'+Date.now();
+    arr.unshift(data);
+    localStorage.setItem('scion-journal',JSON.stringify(arr));
+    allJournalMsgs.unshift(data);
+    renderJournalFilters();
+    renderFilteredJournal();
+}
+
+function deleteJournalEntry(id){
+    if(!confirm('Supprimer cette entree ?'))return;
+    if(firebaseOk&&db&&id.indexOf('local_')!==0){
+        db.ref('scionJournal/'+id).remove();
+    }else{
+        var arr=JSON.parse(localStorage.getItem('scion-journal')||'[]');
+        arr=arr.filter(function(m){return m.id!==id;});
+        localStorage.setItem('scion-journal',JSON.stringify(arr));
+        allJournalMsgs=allJournalMsgs.filter(function(m){return m.id!==id;});
+        renderJournalFilters();
+        renderFilteredJournal();
+    }
+    showToast('Entree supprimee');
+}
 
 function renderJournal(msgs){
     var list=document.getElementById('journal-list');
-    if(!msgs||!msgs.length){list.innerHTML='<div class="card p-8 text-center" style="color:var(--fg-dim)"><i class="fa-solid fa-book-open text-3xl mb-3" style="opacity:.2"></i><p>Le journal est vide.</p></div>';return;}
+    if(!msgs||!msgs.length){
+        var emptyMsg=currentFilter==='all'?'Le journal est vide.':'Aucune entree dans cette categorie.';
+        list.innerHTML='<div class="card p-8 text-center" style="color:var(--fg-dim)"><i class="fa-solid fa-book-open text-3xl mb-3" style="opacity:.2"></i><p>'+emptyMsg+'</p></div>';
+        return;
+    }
     msgs.sort(function(a,b){return(b.date||0)-(a.date||0);});
     list.innerHTML=msgs.map(function(m,idx){
         var catConfig=JOURNAL_CATS[m.category]||JOURNAL_CATS.chronique;
@@ -315,7 +352,35 @@ function renderJournal(msgs){
     }).join('');
 }
 
-function initJournal(){var dot=document.getElementById('j-status-dot'),txt=document.getElementById('j-status-text');if(firebaseOk&&db){db.ref('scionJournal').orderByChild('date').on('value',function(snapshot){var msgs=[];snapshot.forEach(function(child){var m=child.val();m.id=child.key;msgs.push(m);});var local=JSON.parse(localStorage.getItem('scion-journal')||'[]');var localOnly=local.filter(function(lm){return lm.id&&lm.id.indexOf('local_')===0&&!msgs.find(function(fm){return fm.id===lm.id;});});renderJournal(msgs.concat(localOnly));if(dot)dot.className='status-dot on';if(txt)txt.textContent='Actif';},function(err){console.error('Journal error:',err);var local=JSON.parse(localStorage.getItem('scion-journal')||'[]');renderJournal(local);if(dot)dot.className='status-dot off';if(txt)txt.textContent='Erreur';});}else{var local=JSON.parse(localStorage.getItem('scion-journal')||'[]');renderJournal(local);if(dot)dot.className='status-dot off';if(txt)txt.textContent='Hors ligne';}}
+function initJournal(){
+    var dot=document.getElementById('j-status-dot'),txt=document.getElementById('j-status-text');
+    if(firebaseOk&&db){
+        db.ref('scionJournal').orderByChild('date').on('value',function(snapshot){
+            var msgs=[];
+            snapshot.forEach(function(child){var m=child.val();m.id=child.key;msgs.push(m);});
+            var local=JSON.parse(localStorage.getItem('scion-journal')||'[]');
+            var localOnly=local.filter(function(lm){return lm.id&&lm.id.indexOf('local_')===0&&!msgs.find(function(fm){return fm.id===lm.id;});});
+            allJournalMsgs=msgs.concat(localOnly);
+            renderJournalFilters();
+            renderFilteredJournal();
+            if(dot)dot.className='status-dot on';
+            if(txt)txt.textContent='Actif';
+        },function(err){
+            console.error('Journal error:',err);
+            allJournalMsgs=JSON.parse(localStorage.getItem('scion-journal')||'[]');
+            renderJournalFilters();
+            renderFilteredJournal();
+            if(dot)dot.className='status-dot off';
+            if(txt)txt.textContent='Erreur';
+        });
+    }else{
+        allJournalMsgs=JSON.parse(localStorage.getItem('scion-journal')||'[]');
+        renderJournalFilters();
+        renderFilteredJournal();
+        if(dot)dot.className='status-dot off';
+        if(txt)txt.textContent='Hors ligne';
+    }
+}
 
 function loadCampaign(){document.getElementById('campaign-name').value=state.campaign.name||'';document.getElementById('campaign-saga').value=state.campaign.saga||'origine';document.getElementById('campaign-desc').value=state.campaign.desc||'';}
 function saveCampaign(){state.campaign={name:document.getElementById('campaign-name').value.trim(),saga:document.getElementById('campaign-saga').value,desc:document.getElementById('campaign-desc').value.trim()};saveState();showToast('Campagne sauvegardee');}
